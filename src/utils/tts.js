@@ -411,7 +411,10 @@ export class TTSEngine {
       }
 
       this._audioEl = audio
-      audio.onended = () => {
+
+      // Couper la lecture XX ms avant la fin pour éliminer le blanc de trailing silence
+      const TRIM_END_MS = 200
+      const goNext = () => {
         URL.revokeObjectURL(url)
         this._edgeCache.delete(index)
         this._audioEl = null
@@ -420,6 +423,15 @@ export class TTSEngine {
           this._speakSentence(index + 1)
         }
       }
+
+      audio.ontimeupdate = () => {
+        if (audio.duration && audio.currentTime >= audio.duration - TRIM_END_MS / 1000) {
+          audio.ontimeupdate = null
+          audio.pause()
+          goNext()
+        }
+      }
+      audio.onended = goNext
       audio.onerror = () => {
         URL.revokeObjectURL(url)
         this._edgeCache.delete(index)
