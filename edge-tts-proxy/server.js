@@ -135,13 +135,16 @@ function handleConnection(clientWs, request) {
     pendingMessages.length = 0
   })
 
-  clientWs.on('message', (data) => {
-    const preview = typeof data === 'string' ? data.substring(0, 80) : `[binary ${data.length}B]`
-    log(`[${connectionId}] Client → Edge: ${preview}`)
+  clientWs.on('message', (data, isBinary) => {
+    // Les messages texte (config, SSML) arrivent comme Buffer dans ws
+    // Il faut les renvoyer comme string pour que Microsoft les accepte
+    const payload = isBinary ? data : data.toString('utf-8')
+    const preview = isBinary ? `[binary ${data.length}B]` : payload.substring(0, 80)
+    log(`[${connectionId}] Client → Edge: ${isBinary ? 'BIN' : 'TXT'} ${preview}`)
     if (edgeReady) {
-      edgeWs.send(data)
+      edgeWs.send(payload)
     } else {
-      pendingMessages.push(data)
+      pendingMessages.push(payload)
     }
   })
 
