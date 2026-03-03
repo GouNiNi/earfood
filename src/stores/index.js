@@ -164,7 +164,8 @@ export async function getSettings() {
   const settings = await settingsStore.getItem('app_settings')
   return settings || {
     geminiApiKey: '',
-    ttsMode: 'local', // 'local' | 'hybrid' | 'cloud'
+    ttsMode: 'hybrid',
+    edgeVoice: 'fr-FR-HenriNeural',
     darkMode: false,
   }
 }

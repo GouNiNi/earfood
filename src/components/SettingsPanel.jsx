@@ -7,8 +7,8 @@ import { EDGE_VOICES, DEFAULT_VOICE, synthesize } from '../utils/edgeTts'
 const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
   const [settings, setSettingsState] = useState({
     geminiApiKey: '',
-    ttsMode: 'local',
-    edgeVoice: DEFAULT_VOICE,
+    ttsMode: 'hybrid',
+    edgeVoice: 'fr-FR-HenriNeural',
     darkMode: false,
   })
   const [cacheCount, setCacheCount] = useState(0)
