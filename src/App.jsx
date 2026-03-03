@@ -66,7 +66,7 @@ function App() {
 
   return (
     <>
-      <WIPLayer status="WIP" />
+      <WIPLayer status="DONE" />
       <div className="app-container" style={{ paddingTop: '28px' }}>
         {currentView === 'library' && (
           <Library
