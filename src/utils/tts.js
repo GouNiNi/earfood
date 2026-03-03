@@ -55,6 +55,9 @@ export class TTSEngine {
     this._edgeCache = new Map()
     this._PRECACHE_AHEAD = 3
 
+    // Trim trailing silence (ms)
+    this.trimEndMs = 200
+
     // Callbacks
     this.onSentenceChange = null
     this.onEnd = null
@@ -93,6 +96,13 @@ export class TTSEngine {
   setEdgeVoice(voice) {
     this.edgeVoice = voice || DEFAULT_VOICE
     this._clearEdgeCache()
+  }
+
+  /**
+   * Définir le trim de fin d'audio (ms)
+   */
+  setTrimEndMs(ms) {
+    this.trimEndMs = Math.max(0, Math.min(1000, Number(ms) || 200))
   }
 
   /**
@@ -413,7 +423,7 @@ export class TTSEngine {
       this._audioEl = audio
 
       // Couper la lecture XX ms avant la fin pour éliminer le blanc de trailing silence
-      const TRIM_END_MS = 200
+      const TRIM_END_MS = this.trimEndMs
       const goNext = () => {
         URL.revokeObjectURL(url)
         this._edgeCache.delete(index)

@@ -9,6 +9,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
     geminiApiKey: '',
     ttsMode: 'hybrid',
     edgeVoice: 'fr-FR-HenriNeural',
+    trimEndMs: 200,
     darkMode: false,
   })
   const [cacheCount, setCacheCount] = useState(0)
@@ -194,6 +195,29 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
             <Volume2 size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
             {testingVoice ? 'Test en cours...' : 'Tester la voix'}
           </button>
+
+          {/* Trim silence de fin */}
+          {settings.ttsMode === 'hybrid' && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                <span>Couper le silence de fin :</span>
+                <span style={{ fontWeight: 500, color: 'var(--text-main)' }}>{settings.trimEndMs ?? 200} ms</span>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="500"
+                step="25"
+                value={settings.trimEndMs ?? 200}
+                onChange={(e) => setSettingsState({ ...settings, trimEndMs: Number(e.target.value) })}
+                style={{ width: '100%' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                <span>0 ms (pas de trim)</span>
+                <span>500 ms</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Cache */}

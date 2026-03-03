@@ -51,6 +51,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     if (settings.edgeVoice) {
       ttsRef.current.setEdgeVoice(settings.edgeVoice)
     }
+    ttsRef.current.setTrimEndMs(settings.trimEndMs ?? 200)
     setTtsMode(settings.ttsMode === 'hybrid' ? 'Edge TTS' : 'Local')
   }, [])
 

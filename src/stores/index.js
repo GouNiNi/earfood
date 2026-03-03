@@ -166,6 +166,7 @@ export async function getSettings() {
     geminiApiKey: '',
     ttsMode: 'hybrid',
     edgeVoice: 'fr-FR-HenriNeural',
+    trimEndMs: 200,
     darkMode: false,
   }
 }

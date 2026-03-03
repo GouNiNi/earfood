@@ -1,39 +1,25 @@
 services:
+  # === PRODUCTION ===
+
   # Builder: Compile l'application Vite (JS/CSS minifié + Service Worker)
   builder:
+    profiles:
+      - prod
     image: node:20-alpine
     volumes:
       - ./:/app
     working_dir: /app
-    # Installe les dépendances et lance le build
     command: sh -c "npm install && npm run build"
 
-  # Edge TTS Proxy: Relaie les WebSocket vers Microsoft Edge TTS
-  edge-tts-proxy:
-    build: ./edge-tts-proxy
-    container_name: earfood-tts-proxy
-    restart: always
-    networks:
-      - proxy
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.earfood-tts.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`) && PathPrefix(`/tts-proxy`)
-      - traefik.http.routers.earfood-tts.tls=true
-      - traefik.http.routers.earfood-tts.entrypoints=websecure
-      - traefik.http.routers.earfood-tts.tls.certresolver=letsencrypt
-      - traefik.http.routers.earfood-tts.priority=200
-      - traefik.http.services.earfood-tts.loadbalancer.server.port=3001
-
   # Nginx: Sert les fichiers compilés (dist) + proxy WebSocket
-  earfood:
+  earfood-prod:
+    profiles:
+      - prod
     image: nginx:alpine
     container_name: earfood
     volumes:
-      # On monte le dossier dist généré par le builder
       - ./dist:/usr/share/nginx/html
-      # On monte la config Nginx personnalisée pour la PWA
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    # Debug: Teste la configuration avant de lancer
     command: sh -c "nginx -t && nginx -g 'daemon off;'"
     restart: always
     networks:
@@ -60,6 +46,57 @@ services:
       - traefik.http.routers.earfood.middlewares=earfood@docker
       - traefik.http.services.earfood.loadbalancer.server.port=80
 
+  # === DÉVELOPPEMENT ===
+
+  # Vite dev server: Hot reload, pas de build, source montée en volume
+  # Après un git pull, les changements sont pris en compte instantanément (HMR)
+  earfood-dev:
+    profiles:
+      - dev
+    image: node:20-alpine
+    container_name: earfood
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - earfood_node_modules:/app/node_modules
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 80"
+    restart: unless-stopped
+    networks:
+      - proxy
+    depends_on:
+      edge-tts-proxy:
+        condition: service_started
+    environment:
+      - NODE_ENV=development
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.earfood.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`)
+      - traefik.http.routers.earfood.tls=true
+      - traefik.http.routers.earfood.entrypoints=websecure
+      - traefik.http.routers.earfood.tls.certresolver=letsencrypt
+      - traefik.http.services.earfood.loadbalancer.server.port=80
+
+  # === COMMUN ===
+
+  # Edge TTS Proxy: Relaie les WebSocket vers Microsoft Edge TTS
+  edge-tts-proxy:
+    build: ./edge-tts-proxy
+    container_name: earfood-tts-proxy
+    restart: always
+    networks:
+      - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.earfood-tts.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`) && PathPrefix(`/tts-proxy`)
+      - traefik.http.routers.earfood-tts.tls=true
+      - traefik.http.routers.earfood-tts.entrypoints=websecure
+      - traefik.http.routers.earfood-tts.tls.certresolver=letsencrypt
+      - traefik.http.routers.earfood-tts.priority=200
+      - traefik.http.services.earfood-tts.loadbalancer.server.port=3001
+
 networks:
   proxy:
     external: true
+
+volumes:
+  earfood_node_modules:

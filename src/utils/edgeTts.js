@@ -38,9 +38,6 @@ function generateRequestId() {
  */
 function getProxyUrl() {
   const loc = window.location
-  if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
-    return `ws://${loc.hostname}:3001`
-  }
   const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${loc.host}/tts-proxy`
 }
