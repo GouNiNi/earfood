@@ -48,6 +48,10 @@ self.Module = {
 try {
   importScripts(SHERPA_BASE + 'sherpa-onnx-wasm-main-tts.js')
   importScripts(SHERPA_BASE + 'sherpa-onnx-tts.js')
+  console.log('[Sherpa Worker] After imports — self.OfflineTts:', typeof self.OfflineTts, '| window.OfflineTts:', typeof self.window.OfflineTts)
+  // Try to list all global keys containing "Offline"
+  var globals = Object.getOwnPropertyNames(self).filter(function(k) { return k.toLowerCase().indexOf('offline') >= 0 })
+  console.log('[Sherpa Worker] Globals with "offline":', globals)
 } catch (e) {
   console.error('[Sherpa Worker] Script import failed:', e)
 }
