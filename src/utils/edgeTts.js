@@ -1,12 +1,10 @@
 /**
- * Edge TTS — Synthèse vocale neurale gratuite via WebSocket Microsoft
+ * Edge TTS — Synthèse vocale neurale gratuite via proxy WebSocket
  *
- * Protocole : WebSocket vers le service "Read Aloud" de Microsoft Edge.
- * Envoie du SSML, reçoit de l'audio MP3 en chunks binaires.
+ * Le navigateur se connecte au proxy local (/tts-proxy) qui relaie
+ * vers Microsoft Edge TTS avec les headers requis (Origin, User-Agent).
  */
 
-const EDGE_TTS_URL = 'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1'
-const TRUSTED_TOKEN = '6A5AA1D4EAFF4E9FB37E23D68491D6F4'
 const OUTPUT_FORMAT = 'audio-24khz-48kbitrate-mono-mp3'
 
 // Voix Edge TTS françaises de qualité
@@ -23,7 +21,23 @@ function generateRequestId() {
   return crypto.randomUUID().replace(/-/g, '')
 }
 
-function buildConfigMessage(requestId) {
+/**
+ * Construire l'URL du proxy WebSocket
+ * En dev (Vite), on cible localhost:3001
+ * En prod, on passe par /tts-proxy (Nginx reverse proxy)
+ */
+function getProxyUrl() {
+  const loc = window.location
+  if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+    // Dev : proxy direct
+    return `ws://${loc.hostname}:3001`
+  }
+  // Prod : via Nginx reverse proxy
+  const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${loc.host}/tts-proxy`
+}
+
+function buildConfigMessage() {
   return `X-Timestamp:${new Date().toISOString()}\r\n` +
     'Content-Type:application/json; charset=utf-8\r\n' +
     `Path:speech.config\r\n\r\n` +
@@ -40,7 +54,6 @@ function buildConfigMessage(requestId) {
 }
 
 function buildSSMLMessage(requestId, text, voice, rate) {
-  // Convertir rate (0.5-2.0) en pourcentage Edge TTS (-50% à +100%)
   const ratePercent = Math.round((rate - 1) * 100)
   const rateStr = ratePercent >= 0 ? `+${ratePercent}%` : `${ratePercent}%`
 
@@ -67,7 +80,7 @@ function escapeXml(text) {
 }
 
 /**
- * Synthétiser du texte via Edge TTS
+ * Synthétiser du texte via Edge TTS (via proxy)
  * @param {string} text - Texte à synthétiser
  * @param {object} options - { voice, rate }
  * @returns {Promise<ArrayBuffer>} Audio MP3
@@ -81,7 +94,7 @@ export function synthesize(text, options = {}) {
     const audioChunks = []
     let resolved = false
 
-    const wsUrl = `${EDGE_TTS_URL}?TrustedClientToken=${TRUSTED_TOKEN}&ConnectionId=${requestId}`
+    const wsUrl = getProxyUrl()
 
     let ws
     try {
@@ -100,35 +113,26 @@ export function synthesize(text, options = {}) {
     }, 30000)
 
     ws.onopen = () => {
-      // Envoyer la config
-      ws.send(buildConfigMessage(requestId))
-      // Envoyer le SSML
+      ws.send(buildConfigMessage())
       ws.send(buildSSMLMessage(requestId, text, voice, rate))
     }
 
     ws.onmessage = (event) => {
       if (event.data instanceof Blob) {
-        // Message binaire : contient un header texte + données audio
         event.data.arrayBuffer().then(buffer => {
-          // Le header se termine par "Path:audio\r\n"
           const view = new DataView(buffer)
-          // Les 2 premiers octets indiquent la taille du header
           const headerSize = view.getUint16(0)
-          // L'audio commence après le header (2 bytes de taille + header)
           const audioData = buffer.slice(2 + headerSize)
           if (audioData.byteLength > 0) {
             audioChunks.push(audioData)
           }
         })
       } else if (typeof event.data === 'string') {
-        // Message texte : métadonnées ou signal de fin
         if (event.data.includes('Path:turn.end')) {
-          // Fin de la synthèse
           clearTimeout(timeout)
           if (!resolved) {
             resolved = true
             ws.close()
-            // Concaténer les chunks audio
             const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
             const result = new Uint8Array(totalLength)
             let offset = 0
@@ -146,7 +150,7 @@ export function synthesize(text, options = {}) {
       clearTimeout(timeout)
       if (!resolved) {
         resolved = true
-        reject(new Error('Edge TTS: erreur WebSocket'))
+        reject(new Error('Edge TTS: erreur de connexion au proxy'))
       }
     }
 
@@ -172,7 +176,7 @@ export function synthesize(text, options = {}) {
 }
 
 /**
- * Tester si Edge TTS est disponible
+ * Tester si Edge TTS est disponible (via proxy)
  */
 export async function testEdgeTts() {
   try {
