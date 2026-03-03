@@ -9,7 +9,16 @@
   --accent-gold-soft: #e2d1b0;
   --border-color: #e5e0d8;
   --card-bg: #fff;
-  
+
+  /* Couleurs fonctionnelles */
+  --color-primary: #6366f1;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-highlight-1: #fef08a;
+  --color-highlight-2: #fca5a5;
+  --color-highlight-3: #a7f3d0;
+  --accent-navy: #1a2b3c;
+
   --font-serif: "Playfair Display", serif;
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
