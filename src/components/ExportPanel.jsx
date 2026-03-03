@@ -14,7 +14,8 @@ const ExportPanel = ({ documentTitle, highlights }) => {
       // Estimer la position temporelle à partir de la position en caractères
       // (approximation grossière basée sur ~15 caractères/seconde)
       const estimatedSeconds = Math.floor(hl.startPos / 15)
-      md += `**Passage ${i + 1}** (position: ${formatTime(estimatedSeconds)})\n`
+      const title = hl.title ? ` — ${hl.title}` : ''
+      md += `**Passage ${i + 1}${title}** (position: ${formatTime(estimatedSeconds)})\n`
       md += `> ${hl.text}\n\n`
     })
 
@@ -80,7 +81,7 @@ const ExportPanel = ({ documentTitle, highlights }) => {
               {highlights.map((hl, i) => (
                 <div key={hl.id} className="export-preview-item">
                   <div className="export-preview-number" style={{ borderLeft: `3px solid ${hl.color}` }}>
-                    Passage {i + 1}
+                    Passage {i + 1}{hl.title ? ` — ${hl.title}` : ''}
                   </div>
                   <blockquote className="export-preview-text">
                     {hl.text}

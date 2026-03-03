@@ -1,13 +1,15 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { ArrowLeft, Bookmark, Highlighter, FileText } from 'lucide-react'
-import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights } from '../stores'
+import { ArrowLeft, Bookmark, Highlighter, FileText, BookOpen, MessageCircle } from 'lucide-react'
+import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics } from '../stores'
 import { TTSEngine } from '../utils/tts'
 import Player from './Player'
 import BookmarkPanel from './BookmarkPanel'
 import HighlightPanel from './HighlightPanel'
 import ExportPanel from './ExportPanel'
+import SummaryPanel from './SummaryPanel'
+import ChatPanel from './ChatPanel'
 
-const Reader = ({ documentId, onBack }) => {
+const Reader = ({ documentId, onBack, onOpenSettings }) => {
   const [doc, setDoc] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -25,7 +27,7 @@ const Reader = ({ documentId, onBack }) => {
   const [highlights, setHighlights] = useState([])
 
   // Panel visibility
-  const [activePanel, setActivePanel] = useState(null) // 'bookmarks' | 'highlights' | 'export'
+  const [activePanel, setActivePanel] = useState(null)
 
   // Highlight mode
   const [isHighlightMode, setIsHighlightMode] = useState(false)
@@ -36,6 +38,9 @@ const Reader = ({ documentId, onBack }) => {
   // Text view ref for auto-scroll
   const textViewRef = useRef(null)
   const sentenceRefs = useRef({})
+
+  // Analytics: track session
+  const sessionStartRef = useRef(null)
 
   // Initialize TTS engine
   useEffect(() => {
@@ -50,11 +55,15 @@ const Reader = ({ documentId, onBack }) => {
     tts.onEnd = () => {
       setIsPlaying(false)
       handleSaveProgress()
+      updateAnalytics({ documentCompleted: true })
     }
     tts.onProgressUpdate = (charPos, pct) => {
       setCurrentTime(tts.getEstimatedCurrentTime())
       setPercentage(pct)
     }
+
+    // Track session start
+    updateAnalytics({ newSession: true })
 
     return () => {
       if (ttsRef.current) {
@@ -123,10 +132,15 @@ const Reader = ({ documentId, onBack }) => {
     })
   }, [documentId, doc])
 
-  // Save progress periodically while playing
+  // Save progress periodically while playing + track listening time
   useEffect(() => {
     if (!isPlaying) return
-    const interval = setInterval(handleSaveProgress, 5000)
+    sessionStartRef.current = Date.now()
+    const interval = setInterval(() => {
+      handleSaveProgress()
+      // Track listening time every 5s
+      updateAnalytics({ listeningTime: 5 })
+    }, 5000)
     return () => clearInterval(interval)
   }, [isPlaying, handleSaveProgress])
 
@@ -146,11 +160,9 @@ const Reader = ({ documentId, onBack }) => {
     const selection = window.getSelection()
     const text = selection.toString().trim()
     if (text) {
-      // Trouver la position dans le contenu du document
       const textView = textViewRef.current
       if (textView) {
         const range = selection.getRangeAt(0)
-        // Calculer la position dans le texte complet
         const preRange = document.createRange()
         preRange.setStart(textView, 0)
         preRange.setEnd(range.startContainer, range.startOffset)
@@ -200,7 +212,6 @@ const Reader = ({ documentId, onBack }) => {
   }
 
   const handleJumpToBookmark = (position) => {
-    // Position est en secondes estimées — convertir en pourcentage
     const pct = totalDuration > 0 ? (position / totalDuration) * 100 : 0
     handleSeek(pct)
   }
@@ -240,7 +251,6 @@ const Reader = ({ documentId, onBack }) => {
           const pos = sentencePositions[index]
           const isCurrent = index === currentSentenceIndex
 
-          // Vérifier si cette phrase a des surlignages
           const overlappingHighlights = highlights.filter(hl =>
             pos && hl.startPos < pos.end && hl.endPos > pos.start
           )
@@ -321,6 +331,20 @@ const Reader = ({ documentId, onBack }) => {
           <span>Surligner</span>
         </button>
         <button
+          className={`reader-action-btn ${activePanel === 'summaries' ? 'active' : ''}`}
+          onClick={() => togglePanel('summaries')}
+        >
+          <BookOpen size={16} />
+          <span>Résumés</span>
+        </button>
+        <button
+          className={`reader-action-btn ${activePanel === 'chat' ? 'active' : ''}`}
+          onClick={() => togglePanel('chat')}
+        >
+          <MessageCircle size={16} />
+          <span>Chat</span>
+        </button>
+        <button
           className={`reader-action-btn ${activePanel === 'export' ? 'active' : ''}`}
           onClick={() => togglePanel('export')}
         >
@@ -329,7 +353,7 @@ const Reader = ({ documentId, onBack }) => {
         </button>
       </div>
 
-      {/* Panneau contextuel */}
+      {/* Panneaux contextuels */}
       {activePanel === 'bookmarks' && (
         <BookmarkPanel
           documentId={documentId}
@@ -351,6 +375,20 @@ const Reader = ({ documentId, onBack }) => {
           onColorChange={setActiveColor}
           isHighlightMode={isHighlightMode}
           onToggleHighlightMode={() => setIsHighlightMode(!isHighlightMode)}
+        />
+      )}
+      {activePanel === 'summaries' && (
+        <SummaryPanel
+          documentId={documentId}
+          documentContent={doc.content}
+          onConfigureApi={onOpenSettings}
+        />
+      )}
+      {activePanel === 'chat' && (
+        <ChatPanel
+          documentId={documentId}
+          documentContent={doc.content}
+          onConfigureApi={onOpenSettings}
         />
       )}
       {activePanel === 'export' && (

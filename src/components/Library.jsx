@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { Plus, Book, Trash2, Headphones, Play, Clock } from 'lucide-react'
+import { Plus, Book, Trash2, Headphones, Play, Clock, Settings } from 'lucide-react'
 import { getAllDocuments, deleteDocument as deleteDoc, getProgress } from '../stores'
 import { formatDuration, formatRelativeTime } from '../utils/formatTime'
 import ImportModal from './ImportModal'
 
-const Library = ({ onOpenDocument }) => {
+const Library = ({ onOpenDocument, onOpenSettings }) => {
   const [documents, setDocuments] = useState([])
   const [progressMap, setProgressMap] = useState({})
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
@@ -60,10 +60,15 @@ const Library = ({ onOpenDocument }) => {
           <Headphones size={28} color="var(--accent-gold)" />
           <h1 className="app-title">EarFood</h1>
         </div>
-        <button className="primary" onClick={() => setIsImportModalOpen(true)}>
-          <Plus size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
-          Importer
-        </button>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button onClick={onOpenSettings} style={{ padding: '0.6rem' }}>
+            <Settings size={18} />
+          </button>
+          <button className="primary" onClick={() => setIsImportModalOpen(true)}>
+            <Plus size={18} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+            Importer
+          </button>
+        </div>
       </header>
 
       <main>

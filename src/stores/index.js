@@ -24,10 +24,28 @@ export const highlightsStore = localforage.createInstance({
   storeName: 'highlights'
 })
 
-// Store pour les résumés (Phase 2)
+// Store pour les résumés
 export const summariesStore = localforage.createInstance({
   name: 'EarFood',
   storeName: 'summaries'
+})
+
+// Store pour les réglages
+export const settingsStore = localforage.createInstance({
+  name: 'EarFood',
+  storeName: 'settings'
+})
+
+// Store pour l'historique de chat
+export const chatStore = localforage.createInstance({
+  name: 'EarFood',
+  storeName: 'chat'
+})
+
+// Store pour les analytics
+export const analyticsStore = localforage.createInstance({
+  name: 'EarFood',
+  storeName: 'analytics'
 })
 
 // === Documents API ===
@@ -122,4 +140,102 @@ export async function saveHighlight(highlight) {
 
 export async function deleteHighlight(id) {
   await highlightsStore.removeItem(id)
+}
+
+// === Summaries API ===
+
+export async function getSummaries(documentId) {
+  const summaries = []
+  await summariesStore.iterate((value) => {
+    if (value.documentId === documentId) summaries.push(value)
+  })
+  return summaries.sort((a, b) => a.chapterStart - b.chapterStart)
+}
+
+export async function saveSummary(summary) {
+  const key = `${summary.documentId}_${summary.chapterStart}`
+  await summariesStore.setItem(key, summary)
+  return summary
+}
+
+// === Settings API ===
+
+export async function getSettings() {
+  const settings = await settingsStore.getItem('app_settings')
+  return settings || {
+    geminiApiKey: '',
+    ttsMode: 'local', // 'local' | 'hybrid' | 'cloud'
+    darkMode: false,
+  }
+}
+
+export async function saveSettings(settings) {
+  await settingsStore.setItem('app_settings', settings)
+  return settings
+}
+
+// === Chat API ===
+
+export async function getChatHistory(documentId) {
+  return (await chatStore.getItem(documentId)) || []
+}
+
+export async function saveChatHistory(documentId, messages) {
+  await chatStore.setItem(documentId, messages)
+}
+
+export async function clearChatHistory(documentId) {
+  await chatStore.removeItem(documentId)
+}
+
+// === Analytics API ===
+
+export async function getAnalytics() {
+  return (await analyticsStore.getItem('stats')) || {
+    totalListeningTime: 0,
+    sessionsCount: 0,
+    documentsCompleted: 0,
+    dailyStats: {},
+  }
+}
+
+export async function updateAnalytics(update) {
+  const stats = await getAnalytics()
+  const today = new Date().toISOString().split('T')[0]
+  if (!stats.dailyStats[today]) {
+    stats.dailyStats[today] = { listeningTime: 0, sessions: 0 }
+  }
+  if (update.listeningTime) {
+    stats.totalListeningTime += update.listeningTime
+    stats.dailyStats[today].listeningTime += update.listeningTime
+  }
+  if (update.newSession) {
+    stats.sessionsCount++
+    stats.dailyStats[today].sessions++
+  }
+  if (update.documentCompleted) {
+    stats.documentsCompleted++
+  }
+  await analyticsStore.setItem('stats', stats)
+  return stats
+}
+
+// === Cache Management ===
+
+export async function clearAllData() {
+  await documentsStore.clear()
+  await progressStore.clear()
+  await bookmarksStore.clear()
+  await highlightsStore.clear()
+  await summariesStore.clear()
+  await chatStore.clear()
+  await analyticsStore.clear()
+}
+
+export async function getCacheSize() {
+  let count = 0
+  for (const store of [documentsStore, progressStore, bookmarksStore, highlightsStore, summariesStore, chatStore]) {
+    count += await store.length()
+  }
+  return count
 }

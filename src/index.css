@@ -96,3 +96,69 @@ button.primary:hover {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-gold);
 }
+
+/* === DARK MODE === */
+html.dark {
+  --bg-paper: #1a1a2e;
+  --text-main: #e0e0e8;
+  --text-muted: #8888a0;
+  --accent-gold: #d4a853;
+  --accent-gold-soft: #4a3f2e;
+  --border-color: #2a2a42;
+  --card-bg: #22223a;
+  --accent-navy: #e0e0e8;
+  --color-highlight-1: #5c5520;
+  --color-highlight-2: #5c2020;
+  --color-highlight-3: #1c4030;
+}
+
+html.dark body {
+  background-color: var(--bg-paper);
+  color: var(--text-main);
+}
+
+html.dark button {
+  background: var(--card-bg);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+html.dark button.primary {
+  background: var(--accent-gold);
+  color: #1a1a2e;
+  border-color: var(--accent-gold);
+}
+
+html.dark .doc-card,
+html.dark .panel,
+html.dark .modal-content,
+html.dark .reader-text-view {
+  background: var(--card-bg);
+}
+
+html.dark .chat-message-user .chat-bubble {
+  background: var(--accent-gold);
+  color: #1a1a2e;
+}
+
+html.dark .chat-message-assistant .chat-bubble {
+  background: var(--card-bg);
+  border-color: var(--border-color);
+}
+
+html.dark .chat-input,
+html.dark .settings-input,
+html.dark .bookmark-input,
+html.dark .highlight-edit-input {
+  background: var(--bg-paper);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}
+
+html.dark .modal-overlay {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+html.dark .chat-speak-btn {
+  background: var(--card-bg);
+}
