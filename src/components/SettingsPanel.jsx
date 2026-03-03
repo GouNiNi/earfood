@@ -4,11 +4,17 @@ import { getSettings, saveSettings, clearAllData, getCacheSize } from '../stores
 import { initGemini } from '../utils/gemini'
 import { EDGE_VOICES, DEFAULT_VOICE, synthesize } from '../utils/edgeTts'
 
+const SHERPA_VOICES = {
+  'fr-FR-siwis': 'Siwis (Féminin)',
+  'fr-FR-tom': 'Tom (Masculin)',
+}
+
 const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
   const [settings, setSettingsState] = useState({
     geminiApiKey: '',
     ttsMode: 'hybrid',
     edgeVoice: 'fr-FR-HenriNeural',
+    sherpaVoice: 'fr-FR-siwis',
     trimEndMs: 200,
     darkMode: false,
   })
@@ -68,6 +74,23 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
       const frVoice = voices.find(v => v.lang.startsWith('fr'))
       if (frVoice) utterance.voice = frVoice
       window.speechSynthesis.speak(utterance)
+    } else if (settings.ttsMode === 'sherpa') {
+      // Test Sherpa-ONNX
+      setTestingVoice(true)
+      try {
+        const { sherpaAPI } = await import('../utils/sherpa.js')
+        await sherpaAPI.init()
+        await sherpaAPI.loadVoice(settings.sherpaVoice || 'fr-FR-siwis')
+        const audioData = await sherpaAPI.generate('Bonjour, je suis EarFood, votre assistant de lecture.', 1.0)
+        if (audioData) {
+          const { promise } = sherpaAPI.playBuffer(audioData.samples, audioData.sampleRate)
+          await promise
+        }
+      } catch (e) {
+        alert('Erreur Sherpa : ' + e.message + '\nLe mode local sera utilisé en fallback.')
+      } finally {
+        setTestingVoice(false)
+      }
     } else {
       // Test Edge TTS
       setTestingVoice(true)
@@ -150,6 +173,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
             {[
               { value: 'local', label: 'Local uniquement', desc: 'Web Speech API — Privé, fonctionne hors-ligne' },
               { value: 'hybrid', label: 'Hybride (recommandé)', desc: 'Edge TTS Neural — Voix haute qualité, fallback local automatique' },
+              { value: 'sherpa', label: 'IA locale (Sherpa)', desc: 'Voix neurale offline — ~100 Mo à télécharger, fonctionne sans réseau' },
             ].map(mode => (
               <label key={mode.value} className={`settings-radio ${settings.ttsMode === mode.value ? 'active' : ''}`}>
                 <input
@@ -186,6 +210,25 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
             </div>
           )}
 
+          {/* Sélection voix Sherpa */}
+          {settings.ttsMode === 'sherpa' && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.4rem' }}>
+                Voix Sherpa :
+              </label>
+              <select
+                value={settings.sherpaVoice || 'fr-FR-siwis'}
+                onChange={(e) => setSettingsState({ ...settings, sherpaVoice: e.target.value })}
+                className="settings-input"
+                style={{ width: '100%' }}
+              >
+                {Object.entries(SHERPA_VOICES).map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Tester la voix */}
           <button
             onClick={handleTestVoice}
@@ -197,7 +240,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
           </button>
 
           {/* Trim silence de fin */}
-          {settings.ttsMode === 'hybrid' && (
+          {(settings.ttsMode === 'hybrid' || settings.ttsMode === 'sherpa') && (
             <div style={{ marginTop: '0.75rem' }}>
               <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
                 <span>Couper le silence de fin :</span>

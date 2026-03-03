@@ -51,8 +51,12 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     if (settings.edgeVoice) {
       ttsRef.current.setEdgeVoice(settings.edgeVoice)
     }
+    if (settings.sherpaVoice) {
+      ttsRef.current.setSherpaVoice(settings.sherpaVoice)
+    }
     ttsRef.current.setTrimEndMs(settings.trimEndMs ?? 200)
-    setTtsMode(settings.ttsMode === 'hybrid' ? 'Edge TTS' : 'Local')
+    const modeLabels = { hybrid: 'Edge TTS', sherpa: 'Sherpa IA', local: 'Local' }
+    setTtsMode(modeLabels[settings.ttsMode] || 'Local')
   }, [])
 
   // Initialize TTS engine

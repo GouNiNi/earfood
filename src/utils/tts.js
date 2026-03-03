@@ -2,6 +2,7 @@
  * Moteur TTS unifié
  * - Mode "local" : Web Speech API (navigateur)
  * - Mode "hybrid" : Edge TTS Neural (WebSocket) avec fallback Web Speech API
+ * - Mode "sherpa" : Sherpa-ONNX WASM (voix neurale offline)
  */
 
 import { synthesize, DEFAULT_VOICE } from './edgeTts'
@@ -44,7 +45,7 @@ export class TTSEngine {
     this.voice = null
     this.fullText = ''
 
-    // Mode : 'local' | 'hybrid'
+    // Mode : 'local' | 'hybrid' | 'sherpa'
     this.mode = 'local'
     this.edgeVoice = DEFAULT_VOICE
     // Audio element pour Edge TTS
@@ -54,6 +55,13 @@ export class TTSEngine {
     // Edge TTS pre-cache: Map<sentenceIndex, Promise<ArrayBuffer>>
     this._edgeCache = new Map()
     this._PRECACHE_AHEAD = 3
+
+    // Sherpa-ONNX state
+    this.sherpaVoice = 'fr-FR-siwis'
+    this._sherpaAPI = null       // lazy-loaded sherpa module
+    this._sherpaCache = new Map() // Map<sentenceIndex, Promise<{samples, sampleRate}>>
+    this._sherpaStop = null       // stop handle for current playback
+    this._sherpaFallbackActive = false
 
     // Trim trailing silence (ms)
     this.trimEndMs = 200
@@ -85,9 +93,13 @@ export class TTSEngine {
    * Définir le mode TTS
    */
   setMode(mode) {
-    this.mode = mode === 'hybrid' ? 'hybrid' : 'local'
+    if (mode === 'hybrid') this.mode = 'hybrid'
+    else if (mode === 'sherpa') this.mode = 'sherpa'
+    else this.mode = 'local'
     this._edgeFallbackActive = false
+    this._sherpaFallbackActive = false
     this._clearEdgeCache()
+    this._clearSherpaCache()
   }
 
   /**
@@ -96,6 +108,20 @@ export class TTSEngine {
   setEdgeVoice(voice) {
     this.edgeVoice = voice || DEFAULT_VOICE
     this._clearEdgeCache()
+  }
+
+  /**
+   * Définir la voix Sherpa-ONNX
+   */
+  setSherpaVoice(voice) {
+    if (voice && voice !== this.sherpaVoice) {
+      this.sherpaVoice = voice
+      this._clearSherpaCache()
+      // Force reload voice on next speak
+      if (this._sherpaAPI) {
+        this._sherpaAPI.loadVoice(voice).catch(() => {})
+      }
+    }
   }
 
   /**
@@ -111,6 +137,7 @@ export class TTSEngine {
   loadText(text) {
     this.stop()
     this._clearEdgeCache()
+    this._clearSherpaCache()
     this.fullText = text
     this.sentences = splitIntoSentences(text)
     this.sentencePositions = getSentencePositions(text, this.sentences)
@@ -134,11 +161,20 @@ export class TTSEngine {
       this.isPlaying = true
       return
     }
+    if (this.isPaused && this.mode === 'sherpa' && this._sherpaAPI) {
+      this._sherpaAPI.resume()
+      this.isPaused = false
+      this.isPlaying = true
+      return
+    }
     this.isPlaying = true
     this.isPaused = false
-    // Lancer le pré-cache dès le play en mode hybrid
+    // Lancer le pré-cache dès le play
     if (this.mode === 'hybrid' && !this._edgeFallbackActive) {
       this._prefetchAhead(this.currentSentenceIndex - 1)
+    }
+    if (this.mode === 'sherpa' && !this._sherpaFallbackActive) {
+      this._prefetchAheadSherpa(this.currentSentenceIndex - 1)
     }
     this._speakSentence(this.currentSentenceIndex)
   }
@@ -148,7 +184,10 @@ export class TTSEngine {
    */
   pause() {
     if (!this.isPlaying) return
-    if (this._audioEl && !this._audioEl.paused) {
+    if (this.mode === 'sherpa' && this._sherpaAPI) {
+      if (this._sherpaStop) { this._sherpaStop(); this._sherpaStop = null }
+      this._sherpaAPI.suspend()
+    } else if (this._audioEl && !this._audioEl.paused) {
       this._audioEl.pause()
     } else {
       this.synth.pause()
@@ -166,6 +205,10 @@ export class TTSEngine {
       this._audioEl.pause()
       this._audioEl.src = ''
       this._audioEl = null
+    }
+    if (this._sherpaStop) {
+      this._sherpaStop()
+      this._sherpaStop = null
     }
     this.isPlaying = false
     this.isPaused = false
@@ -235,6 +278,7 @@ export class TTSEngine {
   setRate(rate) {
     this.rate = Math.max(0.5, Math.min(2, rate))
     this._clearEdgeCache()
+    this._clearSherpaCache()
     if (this.isPlaying) {
       this.stop()
       this.play()
@@ -285,7 +329,9 @@ export class TTSEngine {
     this._emitProgress()
 
     // Choisir le mode de synthèse
-    if (this.mode === 'hybrid' && !this._edgeFallbackActive) {
+    if (this.mode === 'sherpa' && !this._sherpaFallbackActive) {
+      this._speakSherpa(sentence, index)
+    } else if (this.mode === 'hybrid' && !this._edgeFallbackActive) {
       this._speakEdge(sentence, index)
     } else {
       this._speakLocal(sentence, index)
@@ -461,6 +507,129 @@ export class TTSEngine {
     } catch (err) {
       console.warn(`[TTS] Edge échoué #${index}, fallback:`, err.message)
       this._activateFallback()
+      this._speakLocal(sentence, index)
+    }
+  }
+
+  // === Sherpa-ONNX methods ===
+
+  /**
+   * Lazy-load the sherpa module
+   */
+  async _ensureSherpa() {
+    if (!this._sherpaAPI) {
+      const { sherpaAPI } = await import('./sherpa.js')
+      this._sherpaAPI = sherpaAPI
+      await sherpaAPI.init()
+      await sherpaAPI.loadVoice(this.sherpaVoice)
+    } else if (!this._sherpaAPI.isReady()) {
+      await this._sherpaAPI.loadVoice(this.sherpaVoice)
+    }
+  }
+
+  /**
+   * Pré-générer l'audio Sherpa pour une phrase
+   */
+  _precacheSherpa(index) {
+    if (index >= this.sentences.length) return null
+
+    if (this._sherpaCache.has(index)) {
+      return this._sherpaCache.get(index)
+    }
+
+    console.log(`[TTS-Sherpa] #${index} → génération: "${this.sentences[index].substring(0, 50)}..."`)
+    const startTime = performance.now()
+
+    const promise = this._ensureSherpa().then(() => {
+      return this._sherpaAPI.generate(this.sentences[index], this.rate)
+    }).then(result => {
+      const elapsed = (performance.now() - startTime).toFixed(0)
+      console.log(`[TTS-Sherpa] #${index} → prêt en ${elapsed}ms`)
+      return result
+    }).catch(err => {
+      console.error(`[TTS-Sherpa] #${index} → erreur:`, err.message)
+      this._sherpaCache.delete(index)
+      throw err
+    })
+
+    this._sherpaCache.set(index, promise)
+    return promise
+  }
+
+  /**
+   * Pré-cache des prochaines phrases Sherpa
+   */
+  _prefetchAheadSherpa(fromIndex) {
+    for (let i = 1; i <= this._PRECACHE_AHEAD; i++) {
+      const idx = fromIndex + i
+      if (idx < this.sentences.length && !this._sherpaCache.has(idx)) {
+        this._precacheSherpa(idx)
+      }
+    }
+    // Nettoyer les anciennes entrées
+    for (const key of this._sherpaCache.keys()) {
+      if (key < fromIndex) {
+        this._sherpaCache.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Vider le cache Sherpa
+   */
+  _clearSherpaCache() {
+    this._sherpaCache.clear()
+  }
+
+  /**
+   * Lecture via Sherpa-ONNX avec pré-cache et fallback local
+   */
+  async _speakSherpa(sentence, index) {
+    try {
+      console.log(`[TTS-Sherpa] ▶ #${index}: "${sentence.substring(0, 60)}..."`)
+
+      // Pré-cache des prochaines phrases
+      this._prefetchAheadSherpa(index)
+
+      const t0 = performance.now()
+      const audioData = await this._precacheSherpa(index)
+      const waitMs = (performance.now() - t0).toFixed(0)
+
+      console.log(`[TTS-Sherpa] #${index} prêt en ${waitMs}ms ${waitMs < 10 ? '⚡ cache' : ''}`)
+
+      // Vérifier qu'on est toujours en lecture et sur la bonne phrase
+      if (!this.isPlaying || this.currentSentenceIndex !== index) return
+
+      if (!audioData) {
+        // Phrase vide, passer à la suivante
+        if (this.isPlaying && !this.isPaused) {
+          this._speakSentence(index + 1)
+        }
+        return
+      }
+
+      // Jouer via AudioContext
+      const { promise, stop } = this._sherpaAPI.playBuffer(
+        audioData.samples, audioData.sampleRate, this.trimEndMs
+      )
+      this._sherpaStop = stop
+
+      if (this.onModeInfo) this.onModeInfo('Sherpa IA')
+
+      await promise
+
+      this._sherpaStop = null
+      this._sherpaCache.delete(index)
+
+      if (this.isPlaying && !this.isPaused) {
+        this._speakSentence(index + 1)
+      }
+    } catch (err) {
+      console.warn(`[TTS-Sherpa] Erreur #${index}, fallback local:`, err.message)
+      this._sherpaFallbackActive = true
+      if (this.onModeInfo) this.onModeInfo('Local (fallback)')
+      // Réessayer Sherpa dans 60 secondes
+      setTimeout(() => { this._sherpaFallbackActive = false }, 60000)
       this._speakLocal(sentence, index)
     }
   }
