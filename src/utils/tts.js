@@ -84,6 +84,7 @@ export class TTSEngine {
   setMode(mode) {
     this.mode = mode === 'hybrid' ? 'hybrid' : 'local'
     this._edgeFallbackActive = false
+    this._clearEdgeCache()
   }
 
   /**
@@ -99,6 +100,7 @@ export class TTSEngine {
    */
   loadText(text) {
     this.stop()
+    this._clearEdgeCache()
     this.fullText = text
     this.sentences = splitIntoSentences(text)
     this.sentencePositions = getSentencePositions(text, this.sentences)
@@ -157,7 +159,7 @@ export class TTSEngine {
     }
     this.isPlaying = false
     this.isPaused = false
-    this._clearEdgeCache()
+    // Ne PAS vider le cache ici — il est réutilisé lors de play()/seek/skip
   }
 
   seekToCharPosition(charPos) {
@@ -313,13 +315,25 @@ export class TTSEngine {
    */
   _precacheSentence(index) {
     if (index >= this.sentences.length) return null
-    if (this._edgeCache.has(index)) return this._edgeCache.get(index)
+
+    if (this._edgeCache.has(index)) {
+      console.log(`[TTS-Cache] #${index} → HIT (déjà en cache/en cours)`)
+      return this._edgeCache.get(index)
+    }
+
+    console.log(`[TTS-Cache] #${index} → MISS, lancement synthèse: "${this.sentences[index].substring(0, 50)}..."`)
+    const startTime = performance.now()
 
     const promise = synthesize(this.sentences[index], {
       voice: this.edgeVoice,
       rate: this.rate,
+    }).then(buffer => {
+      const elapsed = (performance.now() - startTime).toFixed(0)
+      console.log(`[TTS-Cache] #${index} → READY en ${elapsed}ms (${buffer.byteLength} bytes)`)
+      return buffer
     }).catch(err => {
-      // Supprimer du cache pour permettre un retry
+      const elapsed = (performance.now() - startTime).toFixed(0)
+      console.error(`[TTS-Cache] #${index} → ERREUR en ${elapsed}ms:`, err.message)
       this._edgeCache.delete(index)
       throw err
     })
@@ -332,17 +346,28 @@ export class TTSEngine {
    * Lancer le pré-cache des N prochaines phrases
    */
   _prefetchAhead(fromIndex) {
+    const toFetch = []
     for (let i = 1; i <= this._PRECACHE_AHEAD; i++) {
       const idx = fromIndex + i
       if (idx < this.sentences.length && !this._edgeCache.has(idx)) {
+        toFetch.push(idx)
         this._precacheSentence(idx)
       }
     }
+    if (toFetch.length > 0) {
+      console.log(`[TTS-Cache] Prefetch depuis #${fromIndex}: lancement ${toFetch.length} phrases [${toFetch.join(', ')}]`)
+    }
+
     // Nettoyer les entrées trop anciennes (avant la phrase courante)
+    let cleaned = 0
     for (const key of this._edgeCache.keys()) {
       if (key < fromIndex) {
         this._edgeCache.delete(key)
+        cleaned++
       }
+    }
+    if (cleaned > 0) {
+      console.log(`[TTS-Cache] Nettoyé ${cleaned} entrée(s) avant #${fromIndex}. Cache size: ${this._edgeCache.size}`)
     }
   }
 
@@ -350,6 +375,9 @@ export class TTSEngine {
    * Vider le cache Edge TTS (changement de rate, voix, etc.)
    */
   _clearEdgeCache() {
+    if (this._edgeCache.size > 0) {
+      console.log(`[TTS-Cache] Cache vidé (${this._edgeCache.size} entrées)`)
+    }
     this._edgeCache.clear()
   }
 
@@ -358,14 +386,24 @@ export class TTSEngine {
    */
   async _speakEdge(sentence, index) {
     try {
+      console.log(`[TTS] ▶ Phrase #${index}/${this.sentences.length - 1}: "${sentence.substring(0, 60)}..."`)
+      console.log(`[TTS-Cache] État cache: ${this._edgeCache.size} entrées [${[...this._edgeCache.keys()].join(', ')}]`)
+
       // Lancer le pré-cache des prochaines phrases en parallèle
       this._prefetchAhead(index)
 
       // Récupérer l'audio (depuis le cache ou en synthétisant)
+      const t0 = performance.now()
       const audioBuffer = await this._precacheSentence(index)
+      const waitMs = (performance.now() - t0).toFixed(0)
+
+      console.log(`[TTS] Phrase #${index} prête en ${waitMs}ms (${waitMs < 50 ? 'depuis cache ✓' : 'attendu synthèse'})`)
 
       // Vérifier qu'on est toujours en lecture et sur la bonne phrase
-      if (!this.isPlaying || this.currentSentenceIndex !== index) return
+      if (!this.isPlaying || this.currentSentenceIndex !== index) {
+        console.log(`[TTS] Phrase #${index} ignorée (état changé: playing=${this.isPlaying}, current=${this.currentSentenceIndex})`)
+        return
+      }
 
       // Créer un blob audio et le jouer
       const blob = new Blob([audioBuffer], { type: 'audio/mpeg' })
@@ -380,32 +418,31 @@ export class TTSEngine {
       this._audioEl.onended = () => {
         URL.revokeObjectURL(url)
         this._audioEl = null
+        console.log(`[TTS] Phrase #${index} terminée, passage à #${index + 1}`)
         if (this.isPlaying && !this.isPaused) {
           this._speakSentence(index + 1)
         }
       }
-      this._audioEl.onerror = () => {
+      this._audioEl.onerror = (e) => {
         URL.revokeObjectURL(url)
         this._audioEl = null
-        console.warn('Edge TTS audio playback error, trying next sentence')
+        console.warn(`[TTS] Erreur lecture audio #${index}:`, e)
         if (this.isPlaying) {
           this._speakSentence(index + 1)
         }
       }
 
-      this._audioEl.play().catch(() => {
-        // Autoplay bloqué — fallback local
+      this._audioEl.play().catch((e) => {
         URL.revokeObjectURL(url)
         this._audioEl = null
-        console.warn('Edge TTS autoplay blocked, falling back to local')
+        console.warn('[TTS] Autoplay bloqué, fallback local:', e)
         this._activateFallback()
         this._speakLocal(sentence, index)
       })
 
       if (this.onModeInfo) this.onModeInfo('Edge TTS')
     } catch (err) {
-      // Edge TTS a échoué — fallback automatique vers Web Speech API
-      console.warn('Edge TTS failed, falling back to local:', err.message)
+      console.warn(`[TTS] Edge TTS échoué pour #${index}, fallback local:`, err.message)
       this._activateFallback()
       this._speakLocal(sentence, index)
     }
