@@ -22,13 +22,6 @@ for file in sherpa-onnx-wasm-main-tts.js sherpa-onnx-wasm-main-tts.wasm sherpa-o
   fi
 done
 
-# Patch: expose OfflineTts class globally (needed for Web Worker importScripts)
-TTS_JS="$DEST/sherpa-onnx-tts.js"
-if ! grep -q "window.OfflineTts" "$TTS_JS" 2>/dev/null; then
-  echo "  [PATCH] Adding window.OfflineTts export to sherpa-onnx-tts.js"
-  echo "window.OfflineTts = OfflineTts;" >> "$TTS_JS"
-fi
-
 echo ""
 echo "=== Downloading French voice models ==="
 

@@ -48,10 +48,6 @@ self.Module = {
 try {
   importScripts(SHERPA_BASE + 'sherpa-onnx-wasm-main-tts.js')
   importScripts(SHERPA_BASE + 'sherpa-onnx-tts.js')
-  console.log('[Sherpa Worker] After imports — self.OfflineTts:', typeof self.OfflineTts, '| window.OfflineTts:', typeof self.window.OfflineTts)
-  // Try to list all global keys containing "Offline"
-  var globals = Object.getOwnPropertyNames(self).filter(function(k) { return k.toLowerCase().indexOf('offline') >= 0 })
-  console.log('[Sherpa Worker] Globals with "offline":', globals)
 } catch (e) {
   console.error('[Sherpa Worker] Script import failed:', e)
 }
@@ -146,13 +142,17 @@ async function loadVoice(voiceId, noiseScale = 0.667) {
       numThreads: 1,
       debug: 0,
       provider: 'cpu'
-    }
+    },
+    maxNumSentences: 1,
+    ruleFsts: '',
+    ruleFars: '',
   }
 
-  const OfflineTts = self.OfflineTts || self.window.OfflineTts
-  if (!OfflineTts) throw new Error('OfflineTts class not found')
+  if (typeof self.createOfflineTts !== 'function') {
+    throw new Error('createOfflineTts not found in global scope')
+  }
 
-  tts = new OfflineTts(config, self.Module)
+  tts = self.createOfflineTts(self.Module, config)
   currentVoiceId = voiceId
 
   console.log(`[Sherpa Worker] Voice ${voiceId} loaded.`)
