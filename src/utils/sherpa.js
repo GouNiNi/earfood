@@ -21,11 +21,9 @@ function init() {
   if (worker) return Promise.resolve()
 
   return new Promise((resolve, reject) => {
-    // Classic worker needed for importScripts()
-    worker = new Worker(
-      new URL('./sherpa-worker.js', import.meta.url),
-      { type: 'classic' }
-    )
+    // Worker loaded from public/ to avoid Vite ES module wrapping
+    // (importScripts doesn't work in ES module workers)
+    worker = new Worker('/sherpa/sherpa-worker.js', { type: 'classic' })
 
     const onWasmReady = (e) => {
       if (e.data.type === 'wasm-ready') {

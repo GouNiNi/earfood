@@ -23,8 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
-# Sherpa-ONNX TTS assets (trop volumineux pour git, à copier manuellement)
-public/sherpa/
+# Sherpa-ONNX TTS assets (downloaded by scripts/download-sherpa.sh)
+public/sherpa/*.wasm
+public/sherpa/*.data
+public/sherpa/*.onnx
+public/sherpa/vits-piper-*/
+public/sherpa/sherpa-onnx-wasm-main-tts.js
+public/sherpa/sherpa-onnx-tts.js
 
 # Environnement
 .env
