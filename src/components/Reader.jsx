@@ -171,12 +171,14 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     return () => clearInterval(interval)
   }, [isPlaying, handleSaveProgress])
 
-  // Auto-scroll to current sentence
+  // Auto-scroll to current sentence (deferred to avoid forced reflow during audio transition)
   useEffect(() => {
     if (currentSentenceIndex >= 0 && sentenceRefs.current[currentSentenceIndex]) {
-      sentenceRefs.current[currentSentenceIndex].scrollIntoView({
-        behavior: 'smooth',
-        block: 'center',
+      requestAnimationFrame(() => {
+        sentenceRefs.current[currentSentenceIndex]?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+        })
       })
     }
   }, [currentSentenceIndex])
