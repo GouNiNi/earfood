@@ -1,17 +1,20 @@
 import { useState, useEffect } from 'react'
-import { Settings, Trash2, Key, Moon, Sun, Database, Info } from 'lucide-react'
+import { Settings, Trash2, Key, Moon, Sun, Database, Info, Volume2 } from 'lucide-react'
 import { getSettings, saveSettings, clearAllData, getCacheSize } from '../stores'
 import { initGemini } from '../utils/gemini'
+import { EDGE_VOICES, DEFAULT_VOICE, synthesize } from '../utils/edgeTts'
 
 const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
   const [settings, setSettingsState] = useState({
     geminiApiKey: '',
     ttsMode: 'local',
+    edgeVoice: DEFAULT_VOICE,
     darkMode: false,
   })
   const [cacheCount, setCacheCount] = useState(0)
   const [saved, setSaved] = useState(false)
   const [apiKeyVisible, setApiKeyVisible] = useState(false)
+  const [testingVoice, setTestingVoice] = useState(false)
 
   useEffect(() => {
     loadSettings()
@@ -20,7 +23,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
 
   const loadSettings = async () => {
     const s = await getSettings()
-    setSettingsState(s)
+    setSettingsState({ edgeVoice: DEFAULT_VOICE, ...s })
     if (s.geminiApiKey) {
       initGemini(s.geminiApiKey)
     }
@@ -53,6 +56,36 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
     setSettingsState(newSettings)
     saveSettings(newSettings)
     onDarkModeChange(!settings.darkMode)
+  }
+
+  const handleTestVoice = async () => {
+    if (settings.ttsMode === 'local') {
+      // Test Web Speech API
+      const utterance = new SpeechSynthesisUtterance('Bonjour, je suis EarFood.')
+      utterance.lang = 'fr-FR'
+      const voices = window.speechSynthesis.getVoices()
+      const frVoice = voices.find(v => v.lang.startsWith('fr'))
+      if (frVoice) utterance.voice = frVoice
+      window.speechSynthesis.speak(utterance)
+    } else {
+      // Test Edge TTS
+      setTestingVoice(true)
+      try {
+        const audio = await synthesize('Bonjour, je suis EarFood, votre assistant de lecture.', {
+          voice: settings.edgeVoice,
+          rate: 1.0,
+        })
+        const blob = new Blob([audio], { type: 'audio/mpeg' })
+        const url = URL.createObjectURL(blob)
+        const el = new Audio(url)
+        el.onended = () => URL.revokeObjectURL(url)
+        el.play()
+      } catch (e) {
+        alert('Erreur Edge TTS : ' + e.message + '\nLe mode local sera utilisé en fallback.')
+      } finally {
+        setTestingVoice(false)
+      }
+    }
   }
 
   return (
@@ -108,12 +141,14 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
 
         {/* Mode TTS */}
         <div className="settings-section">
-          <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.75rem' }}>Mode vocal</h3>
+          <h3 style={{ fontSize: '0.9rem', margin: '0 0 0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Volume2 size={16} />
+            Mode vocal
+          </h3>
           <div className="settings-radio-group">
             {[
               { value: 'local', label: 'Local uniquement', desc: 'Web Speech API — Privé, fonctionne hors-ligne' },
-              { value: 'hybrid', label: 'Hybride', desc: 'Edge TTS Neural avec fallback local (bientôt)' },
-              { value: 'cloud', label: 'Cloud', desc: 'API Cloud pour la meilleure qualité (bientôt)' },
+              { value: 'hybrid', label: 'Hybride (recommandé)', desc: 'Edge TTS Neural — Voix haute qualité, fallback local automatique' },
             ].map(mode => (
               <label key={mode.value} className={`settings-radio ${settings.ttsMode === mode.value ? 'active' : ''}`}>
                 <input
@@ -122,7 +157,6 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
                   value={mode.value}
                   checked={settings.ttsMode === mode.value}
                   onChange={(e) => setSettingsState({ ...settings, ttsMode: e.target.value })}
-                  disabled={mode.value !== 'local'}
                 />
                 <div>
                   <div style={{ fontWeight: 500 }}>{mode.label}</div>
@@ -131,6 +165,35 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
               </label>
             ))}
           </div>
+
+          {/* Sélection voix Edge TTS */}
+          {settings.ttsMode === 'hybrid' && (
+            <div style={{ marginTop: '0.75rem' }}>
+              <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.4rem' }}>
+                Voix Edge TTS :
+              </label>
+              <select
+                value={settings.edgeVoice || DEFAULT_VOICE}
+                onChange={(e) => setSettingsState({ ...settings, edgeVoice: e.target.value })}
+                className="settings-input"
+                style={{ width: '100%' }}
+              >
+                {Object.entries(EDGE_VOICES).map(([id, name]) => (
+                  <option key={id} value={id}>{name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Tester la voix */}
+          <button
+            onClick={handleTestVoice}
+            disabled={testingVoice}
+            style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', fontSize: '0.85rem' }}
+          >
+            <Volume2 size={14} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+            {testingVoice ? 'Test en cours...' : 'Tester la voix'}
+          </button>
         </div>
 
         {/* Cache */}
@@ -160,7 +223,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
         <div style={{ textAlign: 'center', marginTop: '1.5rem', padding: '1rem 0 0', borderTop: '1px solid var(--border-color)' }}>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
             <Info size={12} />
-            EarFood v0.2.0
+            EarFood v0.3.0
           </p>
         </div>
       </div>

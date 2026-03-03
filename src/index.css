@@ -162,3 +162,9 @@ html.dark .modal-overlay {
 html.dark .chat-speak-btn {
   background: var(--card-bg);
 }
+
+html.dark select.settings-input {
+  background: var(--bg-paper);
+  color: var(--text-main);
+  border-color: var(--border-color);
+}

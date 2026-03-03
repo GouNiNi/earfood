@@ -1,12 +1,14 @@
 /**
- * Moteur TTS basé sur la Web Speech API
- * Gère la lecture par phrases avec suivi de position
+ * Moteur TTS unifié
+ * - Mode "local" : Web Speech API (navigateur)
+ * - Mode "hybrid" : Edge TTS Neural (WebSocket) avec fallback Web Speech API
  */
+
+import { synthesize, DEFAULT_VOICE } from './edgeTts'
 
 // Découper le texte en phrases
 export function splitIntoSentences(text) {
   if (!text) return []
-  // Découper sur les points, points d'exclamation, points d'interrogation, et sauts de ligne doubles
   const raw = text.split(/(?<=[.!?])\s+|(?:\n\s*\n)/)
   return raw
     .map(s => s.trim())
@@ -42,19 +44,26 @@ export class TTSEngine {
     this.voice = null
     this.fullText = ''
 
-    // Callbacks
-    this.onSentenceChange = null  // (index, sentencePosition) => void
-    this.onEnd = null             // () => void
-    this.onProgressUpdate = null  // (charPosition, percentage) => void
+    // Mode : 'local' | 'hybrid'
+    this.mode = 'local'
+    this.edgeVoice = DEFAULT_VOICE
+    // Audio element pour Edge TTS
+    this._audioEl = null
+    this._edgeFallbackActive = false
 
-    // Charger les voix françaises
+    // Callbacks
+    this.onSentenceChange = null
+    this.onEnd = null
+    this.onProgressUpdate = null
+    this.onModeInfo = null  // (info: string) => void — feedback mode utilisé
+
+    // Charger les voix Web Speech
     this._loadVoices()
   }
 
   _loadVoices() {
     const setVoice = () => {
       const voices = this.synth.getVoices()
-      // Préférer une voix française
       this.voice = voices.find(v => v.lang.startsWith('fr')) ||
                    voices.find(v => v.lang.startsWith('en')) ||
                    voices[0]
@@ -63,6 +72,21 @@ export class TTSEngine {
     if (this.synth.onvoiceschanged !== undefined) {
       this.synth.onvoiceschanged = setVoice
     }
+  }
+
+  /**
+   * Définir le mode TTS
+   */
+  setMode(mode) {
+    this.mode = mode === 'hybrid' ? 'hybrid' : 'local'
+    this._edgeFallbackActive = false
+  }
+
+  /**
+   * Définir la voix Edge TTS
+   */
+  setEdgeVoice(voice) {
+    this.edgeVoice = voice || DEFAULT_VOICE
   }
 
   /**
@@ -77,17 +101,24 @@ export class TTSEngine {
   }
 
   /**
-   * Lancer la lecture depuis la phrase courante
+   * Lancer la lecture
    */
   play() {
     if (this.sentences.length === 0) return
-    if (this.isPaused) {
+    if (this.isPaused && this.mode === 'local') {
       this.synth.resume()
       this.isPaused = false
       this.isPlaying = true
       return
     }
+    if (this.isPaused && this._audioEl) {
+      this._audioEl.play()
+      this.isPaused = false
+      this.isPlaying = true
+      return
+    }
     this.isPlaying = true
+    this.isPaused = false
     this._speakSentence(this.currentSentenceIndex)
   }
 
@@ -96,7 +127,11 @@ export class TTSEngine {
    */
   pause() {
     if (!this.isPlaying) return
-    this.synth.pause()
+    if (this._audioEl && !this._audioEl.paused) {
+      this._audioEl.pause()
+    } else {
+      this.synth.pause()
+    }
     this.isPaused = true
     this.isPlaying = false
   }
@@ -106,18 +141,19 @@ export class TTSEngine {
    */
   stop() {
     this.synth.cancel()
+    if (this._audioEl) {
+      this._audioEl.pause()
+      this._audioEl.src = ''
+      this._audioEl = null
+    }
     this.isPlaying = false
     this.isPaused = false
   }
 
-  /**
-   * Aller à une position en caractères dans le texte
-   */
   seekToCharPosition(charPos) {
     const wasPlaying = this.isPlaying
     this.stop()
 
-    // Trouver la phrase correspondant à cette position
     let targetIndex = 0
     for (let i = 0; i < this.sentencePositions.length; i++) {
       if (this.sentencePositions[i].start <= charPos) {
@@ -138,9 +174,6 @@ export class TTSEngine {
     }
   }
 
-  /**
-   * Avancer/reculer d'un nombre de phrases
-   */
   skipSentences(count) {
     const wasPlaying = this.isPlaying
     this.stop()
@@ -159,19 +192,12 @@ export class TTSEngine {
     }
   }
 
-  /**
-   * Avancer/reculer d'environ N secondes (estimé)
-   */
   skip(seconds) {
-    // Estimer ~15 mots/seconde à vitesse 1x, ajusté par le rate
     const wordsToSkip = Math.abs(seconds) * 2.5 * this.rate
     const direction = seconds > 0 ? 1 : -1
-
     let wordsCount = 0
     let sentencesToSkip = 0
-
-    const startIdx = this.currentSentenceIndex
-    let idx = startIdx
+    let idx = this.currentSentenceIndex
 
     while (wordsCount < wordsToSkip && idx >= 0 && idx < this.sentences.length) {
       idx += direction
@@ -184,22 +210,14 @@ export class TTSEngine {
     this.skipSentences(direction * Math.max(1, sentencesToSkip))
   }
 
-  /**
-   * Changer la vitesse de lecture
-   */
   setRate(rate) {
     this.rate = Math.max(0.5, Math.min(2, rate))
     if (this.isPlaying) {
-      // Relancer à la phrase courante avec la nouvelle vitesse
-      const wasPlaying = true
       this.stop()
-      if (wasPlaying) this.play()
+      this.play()
     }
   }
 
-  /**
-   * Obtenir la position actuelle en caractères
-   */
   getCurrentCharPosition() {
     if (this.sentencePositions[this.currentSentenceIndex]) {
       return this.sentencePositions[this.currentSentenceIndex].start
@@ -207,25 +225,16 @@ export class TTSEngine {
     return 0
   }
 
-  /**
-   * Obtenir le pourcentage de progression
-   */
   getPercentage() {
     if (this.fullText.length === 0) return 0
     return Math.round((this.getCurrentCharPosition() / this.fullText.length) * 100)
   }
 
-  /**
-   * Obtenir la durée estimée totale en secondes
-   */
   getEstimatedDuration() {
     const words = this.fullText.split(/\s+/).length
     return Math.ceil((words / 150) * 60)
   }
 
-  /**
-   * Obtenir le temps estimé actuel en secondes
-   */
   getEstimatedCurrentTime() {
     if (this.sentences.length === 0) return 0
     let wordsSoFar = 0
@@ -252,6 +261,18 @@ export class TTSEngine {
     }
     this._emitProgress()
 
+    // Choisir le mode de synthèse
+    if (this.mode === 'hybrid' && !this._edgeFallbackActive) {
+      this._speakEdge(sentence, index)
+    } else {
+      this._speakLocal(sentence, index)
+    }
+  }
+
+  /**
+   * Lecture via Web Speech API (local)
+   */
+  _speakLocal(sentence, index) {
     this.utterance = new SpeechSynthesisUtterance(sentence)
     this.utterance.rate = this.rate
     this.utterance.lang = 'fr-FR'
@@ -265,8 +286,7 @@ export class TTSEngine {
 
     this.utterance.onerror = (e) => {
       if (e.error !== 'canceled' && e.error !== 'interrupted') {
-        console.error('TTS error:', e.error)
-        // Tenter la phrase suivante
+        console.error('TTS local error:', e.error)
         if (this.isPlaying) {
           this._speakSentence(index + 1)
         }
@@ -274,6 +294,72 @@ export class TTSEngine {
     }
 
     this.synth.speak(this.utterance)
+  }
+
+  /**
+   * Lecture via Edge TTS (hybrid) avec fallback automatique
+   */
+  async _speakEdge(sentence, index) {
+    try {
+      const audioBuffer = await synthesize(sentence, {
+        voice: this.edgeVoice,
+        rate: this.rate,
+      })
+
+      // Vérifier qu'on est toujours en lecture et sur la bonne phrase
+      if (!this.isPlaying || this.currentSentenceIndex !== index) return
+
+      // Créer un blob audio et le jouer
+      const blob = new Blob([audioBuffer], { type: 'audio/mpeg' })
+      const url = URL.createObjectURL(blob)
+
+      if (this._audioEl) {
+        this._audioEl.pause()
+        this._audioEl.src = ''
+      }
+
+      this._audioEl = new Audio(url)
+      this._audioEl.onended = () => {
+        URL.revokeObjectURL(url)
+        this._audioEl = null
+        if (this.isPlaying && !this.isPaused) {
+          this._speakSentence(index + 1)
+        }
+      }
+      this._audioEl.onerror = () => {
+        URL.revokeObjectURL(url)
+        this._audioEl = null
+        console.warn('Edge TTS audio playback error, trying next sentence')
+        if (this.isPlaying) {
+          this._speakSentence(index + 1)
+        }
+      }
+
+      this._audioEl.play().catch(() => {
+        // Autoplay bloqué — fallback local
+        URL.revokeObjectURL(url)
+        this._audioEl = null
+        console.warn('Edge TTS autoplay blocked, falling back to local')
+        this._activateFallback()
+        this._speakLocal(sentence, index)
+      })
+
+      if (this.onModeInfo) this.onModeInfo('Edge TTS')
+    } catch (err) {
+      // Edge TTS a échoué — fallback automatique vers Web Speech API
+      console.warn('Edge TTS failed, falling back to local:', err.message)
+      this._activateFallback()
+      this._speakLocal(sentence, index)
+    }
+  }
+
+  _activateFallback() {
+    this._edgeFallbackActive = true
+    if (this.onModeInfo) this.onModeInfo('Local (fallback)')
+    // Réessayer Edge TTS dans 60 secondes
+    setTimeout(() => {
+      this._edgeFallbackActive = false
+    }, 60000)
   }
 
   _emitProgress() {

@@ -381,6 +381,18 @@
   text-align: center;
 }
 
+.player-mode-badge {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  background: rgba(197, 160, 89, 0.1);
+  padding: 2px 6px;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
 /* === PANELS (Bookmarks, Highlights, Export) === */
 .panel {
   border: 1px solid var(--border-color);

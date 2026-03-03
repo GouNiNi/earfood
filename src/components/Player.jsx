@@ -1,4 +1,4 @@
-import { Play, Pause, SkipBack, SkipForward } from 'lucide-react'
+import { Play, Pause, SkipBack, SkipForward, Radio } from 'lucide-react'
 import { formatTime } from '../utils/formatTime'
 
 const Player = ({
@@ -7,6 +7,7 @@ const Player = ({
   totalDuration,
   percentage,
   rate,
+  ttsMode,
   onPlayPause,
   onSkipBack,
   onSkipForward,
@@ -68,7 +69,7 @@ const Player = ({
         </button>
       </div>
 
-      {/* Contrôle de vitesse */}
+      {/* Vitesse + indicateur mode */}
       <div className="player-speed">
         <span className="player-speed-label">0.5x</span>
         <input
@@ -82,6 +83,12 @@ const Player = ({
         />
         <span className="player-speed-label">2x</span>
         <span className="player-speed-current">{rate}x</span>
+        {ttsMode && (
+          <span className="player-mode-badge" title="Mode vocal actif">
+            <Radio size={10} />
+            {ttsMode}
+          </span>
+        )}
       </div>
     </div>
   )

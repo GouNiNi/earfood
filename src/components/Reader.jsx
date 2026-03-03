@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ArrowLeft, Bookmark, Highlighter, FileText, BookOpen, MessageCircle } from 'lucide-react'
-import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics } from '../stores'
+import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings } from '../stores'
 import { TTSEngine } from '../utils/tts'
 import Player from './Player'
 import BookmarkPanel from './BookmarkPanel'
@@ -21,6 +21,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
   const [totalDuration, setTotalDuration] = useState(0)
   const [percentage, setPercentage] = useState(0)
   const [rate, setRate] = useState(1.0)
+  const [ttsMode, setTtsMode] = useState('')
 
   // Bookmarks & highlights
   const [bookmarks, setBookmarks] = useState([])
@@ -44,25 +45,39 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
 
   // Initialize TTS engine
   useEffect(() => {
-    ttsRef.current = new TTSEngine()
+    const initTts = async () => {
+      ttsRef.current = new TTSEngine()
 
-    const tts = ttsRef.current
-    tts.onSentenceChange = (index, pos) => {
-      setCurrentSentenceIndex(index)
-      setCurrentTime(tts.getEstimatedCurrentTime())
-      setPercentage(tts.getPercentage())
-    }
-    tts.onEnd = () => {
-      setIsPlaying(false)
-      handleSaveProgress()
-      updateAnalytics({ documentCompleted: true })
-    }
-    tts.onProgressUpdate = (charPos, pct) => {
-      setCurrentTime(tts.getEstimatedCurrentTime())
-      setPercentage(pct)
+      // Charger le mode TTS depuis les réglages
+      const settings = await getSettings()
+      ttsRef.current.setMode(settings.ttsMode || 'local')
+      if (settings.edgeVoice) {
+        ttsRef.current.setEdgeVoice(settings.edgeVoice)
+      }
+
+      const tts = ttsRef.current
+      tts.onSentenceChange = (index, pos) => {
+        setCurrentSentenceIndex(index)
+        setCurrentTime(tts.getEstimatedCurrentTime())
+        setPercentage(tts.getPercentage())
+      }
+      tts.onEnd = () => {
+        setIsPlaying(false)
+        handleSaveProgress()
+        updateAnalytics({ documentCompleted: true })
+      }
+      tts.onProgressUpdate = (charPos, pct) => {
+        setCurrentTime(tts.getEstimatedCurrentTime())
+        setPercentage(pct)
+      }
+      tts.onModeInfo = (info) => {
+        setTtsMode(info)
+      }
+
+      setTtsMode(settings.ttsMode === 'hybrid' ? 'Edge TTS' : 'Local')
     }
 
-    // Track session start
+    initTts()
     updateAnalytics({ newSession: true })
 
     return () => {
@@ -405,6 +420,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
         totalDuration={totalDuration}
         percentage={percentage}
         rate={rate}
+        ttsMode={ttsMode}
         onPlayPause={handlePlayPause}
         onSkipBack={handleSkipBack}
         onSkipForward={handleSkipForward}

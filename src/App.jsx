@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import Library from './components/Library'
 import Reader from './components/Reader'
-import WIPLayer from './components/WIPLayer'
 import SettingsPanel from './components/SettingsPanel'
 import { getSettings } from './stores'
 import { initGemini } from './utils/gemini'
@@ -66,8 +65,7 @@ function App() {
 
   return (
     <>
-      <WIPLayer status="DONE" />
-      <div className="app-container" style={{ paddingTop: '28px' }}>
+      <div className="app-container">
         {currentView === 'library' && (
           <Library
             onOpenDocument={openDocument}
