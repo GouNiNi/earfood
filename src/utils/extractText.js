@@ -1,12 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist'
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import mammoth from 'mammoth'
 import ePub from 'epubjs'
 
-// Configurer le worker PDF.js
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.mjs',
-  import.meta.url
-).toString()
+// Configurer le worker PDF.js — Vite gère le hash via ?url
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
 
 /**
  * Extrait le texte d'un fichier selon son type
