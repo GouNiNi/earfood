@@ -1,42 +1,142 @@
-#root {
-  max-width: 1280px;
+.app-container {
+  max-width: 800px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 2rem 1rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 3rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+
+.logo-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.app-title {
+  margin: 0;
+  font-size: 1.8rem;
+  color: var(--text-main);
+}
+
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+}
+
+.doc-card {
+  background: white;
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  border-radius: 4px;
+  position: relative;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.doc-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--accent-gold);
+}
+
+.doc-title {
+  margin: 0;
+  font-size: 1.2rem;
+  color: var(--text-main);
+}
+
+.doc-meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.progress-container {
+  margin-top: auto;
+  padding-top: 1rem;
+}
+
+.progress-bar {
+  height: 4px;
+  background: #eee;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--accent-gold);
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+  display: block;
+  text-align: right;
+}
+
+.empty-state {
   text-align: center;
+  padding: 5rem 2rem;
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  color: var(--text-muted);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.import-btn-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 2rem;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Modal style simple */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(26, 43, 60, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.modal-content {
+  background: var(--bg-paper);
+  padding: 2.5rem;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
-.card {
-  padding: 2em;
+.file-input-wrapper {
+  border: 1px dashed var(--border-color);
+  padding: 3rem;
+  text-align: center;
+  margin: 1.5rem 0;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-.read-the-docs {
-  color: #888;
+.file-input-wrapper:hover {
+  border-color: var(--accent-gold);
 }
