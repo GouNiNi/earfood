@@ -15,6 +15,14 @@ services:
     restart: always
     networks:
       - proxy
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.earfood-tts.rule=Host(`${SUBDOMAIN}.${DOMAIN_NAME}`) && PathPrefix(`/tts-proxy`)
+      - traefik.http.routers.earfood-tts.tls=true
+      - traefik.http.routers.earfood-tts.entrypoints=websecure
+      - traefik.http.routers.earfood-tts.tls.certresolver=letsencrypt
+      - traefik.http.routers.earfood-tts.priority=200
+      - traefik.http.services.earfood-tts.loadbalancer.server.port=3001
 
   # Nginx: Sert les fichiers compilés (dist) + proxy WebSocket
   earfood:

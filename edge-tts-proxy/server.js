@@ -28,11 +28,21 @@ const server = http.createServer((req, res) => {
   }
 })
 
-const wss = new WebSocketServer({ server })
+// Accept WebSocket on any path (noServer mode)
+const wss = new WebSocketServer({ noServer: true })
 
-wss.on('connection', (clientWs) => {
+server.on('upgrade', (request, socket, head) => {
+  console.log(`WS upgrade request on path: ${request.url}`)
+  wss.handleUpgrade(request, socket, head, (ws) => {
+    wss.emit('connection', ws, request)
+  })
+})
+
+function handleConnection(clientWs) {
   const connectionId = crypto.randomUUID().replace(/-/g, '')
   const targetUrl = `${EDGE_TTS_URL}?TrustedClientToken=${TRUSTED_TOKEN}&ConnectionId=${connectionId}`
+
+  console.log(`New TTS connection ${connectionId}`)
 
   // Connecter à Microsoft Edge TTS avec les bons headers
   const edgeWs = new WebSocket(targetUrl, {
@@ -46,8 +56,8 @@ wss.on('connection', (clientWs) => {
   const pendingMessages = []
 
   edgeWs.on('open', () => {
+    console.log(`Edge TTS connected for ${connectionId}`)
     edgeReady = true
-    // Envoyer les messages en attente
     for (const msg of pendingMessages) {
       edgeWs.send(msg)
     }
@@ -71,14 +81,15 @@ wss.on('connection', (clientWs) => {
   })
 
   // Gestion des fermetures
-  edgeWs.on('close', () => {
+  edgeWs.on('close', (code, reason) => {
+    console.log(`Edge TTS closed for ${connectionId}: ${code} ${reason}`)
     if (clientWs.readyState === WebSocket.OPEN) {
       clientWs.close()
     }
   })
 
   edgeWs.on('error', (err) => {
-    console.error('Edge TTS WebSocket error:', err.message)
+    console.error(`Edge TTS error for ${connectionId}:`, err.message)
     if (clientWs.readyState === WebSocket.OPEN) {
       clientWs.close()
     }
@@ -95,7 +106,9 @@ wss.on('connection', (clientWs) => {
       edgeWs.close()
     }
   })
-})
+}
+
+wss.on('connection', handleConnection)
 
 server.listen(PORT, () => {
   console.log(`Edge TTS proxy listening on port ${PORT}`)
