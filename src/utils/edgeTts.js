@@ -39,10 +39,8 @@ function generateRequestId() {
 function getProxyUrl() {
   const loc = window.location
   if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
-    // Dev : proxy direct
     return `ws://${loc.hostname}:3001`
   }
-  // Prod : via Traefik reverse proxy
   const protocol = loc.protocol === 'https:' ? 'wss:' : 'ws:'
   return `${protocol}//${loc.host}/tts-proxy`
 }
@@ -90,6 +88,19 @@ function escapeXml(text) {
 }
 
 /**
+ * Extraire les données audio d'un buffer binaire Edge TTS
+ * Format: [2 bytes headerSize][header][audioData]
+ */
+function extractAudioFromBuffer(buffer) {
+  if (buffer.byteLength < 2) return null
+  const view = new DataView(buffer)
+  const headerSize = view.getUint16(0)
+  if (2 + headerSize >= buffer.byteLength) return null
+  const audioData = buffer.slice(2 + headerSize)
+  return audioData.byteLength > 0 ? audioData : null
+}
+
+/**
  * Synthétiser du texte via Edge TTS (via proxy)
  * @param {string} text - Texte à synthétiser
  * @param {object} options - { voice, rate }
@@ -101,19 +112,18 @@ export function synthesize(text, options = {}) {
 
   return new Promise((resolve, reject) => {
     const requestId = generateRequestId()
-    const audioChunks = []
+    // Stocker les Blobs bruts de façon SYNCHRONE (pas de .then() pendant la réception)
+    const rawBlobs = []
     let resolved = false
 
     const wsUrl = getProxyUrl()
-    log(`Connecting to proxy: ${wsUrl}`)
-    log(`Voice: ${voice}, Rate: ${rate}, Text: "${text.substring(0, 60)}..."`)
+    log(`Connecting: voice=${voice}, rate=${rate}, text="${text.substring(0, 50)}..."`)
 
     let ws
     try {
       ws = new WebSocket(wsUrl)
-      log('WebSocket object created, waiting for connection...')
     } catch (e) {
-      logError('WebSocket constructor failed:', e.message, e)
+      logError('WebSocket constructor failed:', e.message)
       reject(new Error('WebSocket non disponible'))
       return
     }
@@ -121,60 +131,59 @@ export function synthesize(text, options = {}) {
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true
-        logError(`TIMEOUT after 30s (readyState=${ws.readyState})`)
+        logError(`TIMEOUT after 30s`)
         ws.close()
         reject(new Error('Edge TTS timeout'))
       }
     }, 30000)
 
     ws.onopen = () => {
-      log(`✓ Connected to proxy (readyState=${ws.readyState})`)
-      log('Sending config message...')
+      log(`✓ Connected`)
       ws.send(buildConfigMessage())
-      log('Sending SSML message...')
       ws.send(buildSSMLMessage(requestId, text, voice, rate))
-      log('Messages sent, waiting for audio response...')
+      log('Config + SSML sent')
     }
 
     ws.onmessage = (event) => {
       if (event.data instanceof Blob) {
-        log(`Received binary blob: ${event.data.size} bytes`)
-        event.data.arrayBuffer().then(buffer => {
-          const view = new DataView(buffer)
-          const headerSize = view.getUint16(0)
-          const audioData = buffer.slice(2 + headerSize)
-          if (audioData.byteLength > 0) {
-            audioChunks.push(audioData)
-            log(`Audio chunk extracted: ${audioData.byteLength} bytes (total chunks: ${audioChunks.length})`)
-          }
-        })
+        // Stocker le Blob brut immédiatement (synchrone, pas de race condition)
+        rawBlobs.push(event.data)
       } else if (typeof event.data === 'string') {
-        log(`Received text message: ${event.data.substring(0, 120)}`)
         if (event.data.includes('Path:turn.end')) {
           clearTimeout(timeout)
           if (!resolved) {
             resolved = true
             ws.close()
-            const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
-            log(`✓ Audio complete: ${audioChunks.length} chunks, ${totalLength} bytes total`)
-            const result = new Uint8Array(totalLength)
-            let offset = 0
-            for (const chunk of audioChunks) {
-              result.set(new Uint8Array(chunk), offset)
-              offset += chunk.byteLength
-            }
-            resolve(result.buffer)
+            // Maintenant convertir TOUS les blobs en ArrayBuffers
+            log(`turn.end reçu, conversion de ${rawBlobs.length} blobs...`)
+            Promise.all(rawBlobs.map(b => b.arrayBuffer()))
+              .then(buffers => {
+                const audioChunks = []
+                for (const buffer of buffers) {
+                  const audio = extractAudioFromBuffer(buffer)
+                  if (audio) audioChunks.push(audio)
+                }
+                const totalLength = audioChunks.reduce((sum, c) => sum + c.byteLength, 0)
+                log(`✓ Audio: ${audioChunks.length} chunks, ${totalLength} bytes`)
+                const result = new Uint8Array(totalLength)
+                let offset = 0
+                for (const chunk of audioChunks) {
+                  result.set(new Uint8Array(chunk), offset)
+                  offset += chunk.byteLength
+                }
+                resolve(result.buffer)
+              })
+              .catch(err => {
+                logError('Erreur conversion blobs:', err)
+                reject(err)
+              })
           }
         }
-      } else {
-        log(`Received unknown message type: ${typeof event.data}`, event.data)
       }
     }
 
-    ws.onerror = (event) => {
-      logError(`WebSocket ERROR (readyState=${ws.readyState})`)
-      logError('Error event:', event)
-      logError('URL was:', wsUrl)
+    ws.onerror = () => {
+      logError(`WebSocket ERROR`)
       clearTimeout(timeout)
       if (!resolved) {
         resolved = true
@@ -183,22 +192,36 @@ export function synthesize(text, options = {}) {
     }
 
     ws.onclose = (event) => {
-      log(`WebSocket CLOSED: code=${event.code}, reason="${event.reason}", wasClean=${event.wasClean}`)
+      log(`WebSocket CLOSED: code=${event.code}, wasClean=${event.wasClean}`)
       clearTimeout(timeout)
       if (!resolved) {
         resolved = true
-        if (audioChunks.length > 0) {
-          const totalLength = audioChunks.reduce((sum, chunk) => sum + chunk.byteLength, 0)
-          log(`Resolving with ${totalLength} bytes from ${audioChunks.length} chunks`)
-          const result = new Uint8Array(totalLength)
-          let offset = 0
-          for (const chunk of audioChunks) {
-            result.set(new Uint8Array(chunk), offset)
-            offset += chunk.byteLength
-          }
-          resolve(result.buffer)
+        if (rawBlobs.length > 0) {
+          log(`Closed before turn.end, converting ${rawBlobs.length} blobs...`)
+          Promise.all(rawBlobs.map(b => b.arrayBuffer()))
+            .then(buffers => {
+              const audioChunks = []
+              for (const buffer of buffers) {
+                const audio = extractAudioFromBuffer(buffer)
+                if (audio) audioChunks.push(audio)
+              }
+              const totalLength = audioChunks.reduce((sum, c) => sum + c.byteLength, 0)
+              if (totalLength > 0) {
+                log(`✓ Audio (partial): ${audioChunks.length} chunks, ${totalLength} bytes`)
+                const result = new Uint8Array(totalLength)
+                let offset = 0
+                for (const chunk of audioChunks) {
+                  result.set(new Uint8Array(chunk), offset)
+                  offset += chunk.byteLength
+                }
+                resolve(result.buffer)
+              } else {
+                reject(new Error('Edge TTS: pas de données audio'))
+              }
+            })
+            .catch(err => reject(err))
         } else {
-          logError(`Connection closed without audio (code=${event.code}, reason="${event.reason}")`)
+          logError(`Connection closed without data (code=${event.code})`)
           reject(new Error('Edge TTS: connexion fermée sans audio'))
         }
       }
@@ -214,7 +237,7 @@ export async function testEdgeTts() {
   try {
     const audio = await synthesize('Test', { voice: DEFAULT_VOICE, rate: 1.0 })
     const ok = audio.byteLength > 100
-    log(`Test result: ${ok ? '✓ OK' : '✗ FAIL'} (${audio.byteLength} bytes)`)
+    log(`Test: ${ok ? '✓ OK' : '✗ FAIL'} (${audio.byteLength} bytes)`)
     return ok
   } catch (err) {
     logError('Test failed:', err.message)
