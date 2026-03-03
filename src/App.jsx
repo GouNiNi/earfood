@@ -83,7 +83,11 @@ function App() {
 
       {showSettings && (
         <SettingsPanel
-          onClose={() => setShowSettings(false)}
+          onClose={() => {
+            setShowSettings(false)
+            // Notify that settings may have changed
+            window.dispatchEvent(new Event('earfood-settings-changed'))
+          }}
           darkMode={darkMode}
           onDarkModeChange={handleDarkModeChange}
         />

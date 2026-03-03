@@ -43,17 +43,24 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
   // Analytics: track session
   const sessionStartRef = useRef(null)
 
+  // Sync TTS engine with saved settings
+  const syncTtsSettings = useCallback(async () => {
+    if (!ttsRef.current) return
+    const settings = await getSettings()
+    ttsRef.current.setMode(settings.ttsMode || 'local')
+    if (settings.edgeVoice) {
+      ttsRef.current.setEdgeVoice(settings.edgeVoice)
+    }
+    setTtsMode(settings.ttsMode === 'hybrid' ? 'Edge TTS' : 'Local')
+  }, [])
+
   // Initialize TTS engine
   useEffect(() => {
     const initTts = async () => {
       ttsRef.current = new TTSEngine()
 
       // Charger le mode TTS depuis les réglages
-      const settings = await getSettings()
-      ttsRef.current.setMode(settings.ttsMode || 'local')
-      if (settings.edgeVoice) {
-        ttsRef.current.setEdgeVoice(settings.edgeVoice)
-      }
+      await syncTtsSettings()
 
       const tts = ttsRef.current
       tts.onSentenceChange = (index, pos) => {
@@ -73,8 +80,6 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
       tts.onModeInfo = (info) => {
         setTtsMode(info)
       }
-
-      setTtsMode(settings.ttsMode === 'hybrid' ? 'Edge TTS' : 'Local')
     }
 
     initTts()
@@ -86,6 +91,13 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
       }
     }
   }, [])
+
+  // Re-sync TTS settings when settings panel closes
+  useEffect(() => {
+    const handler = () => syncTtsSettings()
+    window.addEventListener('earfood-settings-changed', handler)
+    return () => window.removeEventListener('earfood-settings-changed', handler)
+  }, [syncTtsSettings])
 
   // Load document
   useEffect(() => {
