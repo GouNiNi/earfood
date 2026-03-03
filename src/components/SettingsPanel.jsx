@@ -206,7 +206,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
               <input
                 type="range"
                 min="0"
-                max="500"
+                max="1000"
                 step="25"
                 value={settings.trimEndMs ?? 200}
                 onChange={(e) => setSettingsState({ ...settings, trimEndMs: Number(e.target.value) })}
@@ -214,7 +214,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
                 <span>0 ms (pas de trim)</span>
-                <span>500 ms</span>
+                <span>1000 ms</span>
               </div>
             </div>
           )}
