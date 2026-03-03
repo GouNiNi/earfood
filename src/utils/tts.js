@@ -51,6 +51,10 @@ export class TTSEngine {
     this._audioEl = null
     this._edgeFallbackActive = false
 
+    // Edge TTS pre-cache: Map<sentenceIndex, Promise<ArrayBuffer>>
+    this._edgeCache = new Map()
+    this._PRECACHE_AHEAD = 3
+
     // Callbacks
     this.onSentenceChange = null
     this.onEnd = null
@@ -87,6 +91,7 @@ export class TTSEngine {
    */
   setEdgeVoice(voice) {
     this.edgeVoice = voice || DEFAULT_VOICE
+    this._clearEdgeCache()
   }
 
   /**
@@ -119,6 +124,10 @@ export class TTSEngine {
     }
     this.isPlaying = true
     this.isPaused = false
+    // Lancer le pré-cache dès le play en mode hybrid
+    if (this.mode === 'hybrid' && !this._edgeFallbackActive) {
+      this._prefetchAhead(this.currentSentenceIndex - 1)
+    }
     this._speakSentence(this.currentSentenceIndex)
   }
 
@@ -148,6 +157,7 @@ export class TTSEngine {
     }
     this.isPlaying = false
     this.isPaused = false
+    this._clearEdgeCache()
   }
 
   seekToCharPosition(charPos) {
@@ -212,6 +222,7 @@ export class TTSEngine {
 
   setRate(rate) {
     this.rate = Math.max(0.5, Math.min(2, rate))
+    this._clearEdgeCache()
     if (this.isPlaying) {
       this.stop()
       this.play()
@@ -297,14 +308,61 @@ export class TTSEngine {
   }
 
   /**
-   * Lecture via Edge TTS (hybrid) avec fallback automatique
+   * Pré-charger l'audio Edge TTS pour une phrase donnée
+   * Retourne une Promise<ArrayBuffer> mise en cache
+   */
+  _precacheSentence(index) {
+    if (index >= this.sentences.length) return null
+    if (this._edgeCache.has(index)) return this._edgeCache.get(index)
+
+    const promise = synthesize(this.sentences[index], {
+      voice: this.edgeVoice,
+      rate: this.rate,
+    }).catch(err => {
+      // Supprimer du cache pour permettre un retry
+      this._edgeCache.delete(index)
+      throw err
+    })
+
+    this._edgeCache.set(index, promise)
+    return promise
+  }
+
+  /**
+   * Lancer le pré-cache des N prochaines phrases
+   */
+  _prefetchAhead(fromIndex) {
+    for (let i = 1; i <= this._PRECACHE_AHEAD; i++) {
+      const idx = fromIndex + i
+      if (idx < this.sentences.length && !this._edgeCache.has(idx)) {
+        this._precacheSentence(idx)
+      }
+    }
+    // Nettoyer les entrées trop anciennes (avant la phrase courante)
+    for (const key of this._edgeCache.keys()) {
+      if (key < fromIndex) {
+        this._edgeCache.delete(key)
+      }
+    }
+  }
+
+  /**
+   * Vider le cache Edge TTS (changement de rate, voix, etc.)
+   */
+  _clearEdgeCache() {
+    this._edgeCache.clear()
+  }
+
+  /**
+   * Lecture via Edge TTS (hybrid) avec fallback automatique et pré-cache
    */
   async _speakEdge(sentence, index) {
     try {
-      const audioBuffer = await synthesize(sentence, {
-        voice: this.edgeVoice,
-        rate: this.rate,
-      })
+      // Lancer le pré-cache des prochaines phrases en parallèle
+      this._prefetchAhead(index)
+
+      // Récupérer l'audio (depuis le cache ou en synthétisant)
+      const audioBuffer = await this._precacheSentence(index)
 
       // Vérifier qu'on est toujours en lecture et sur la bonne phrase
       if (!this.isPlaying || this.currentSentenceIndex !== index) return
