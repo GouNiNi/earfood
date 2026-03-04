@@ -4,6 +4,102 @@ import { getChatHistory, saveChatHistory, clearChatHistory, getSummaries, getSet
 import { askAboutDocument, isGeminiReady, detectChapters } from '../utils/gemini'
 import { TTSEngine } from '../utils/tts'
 
+// Simple markdown to JSX renderer for chat bubbles
+function renderMarkdown(text) {
+  if (!text) return null
+  const lines = text.split('\n')
+  const elements = []
+  let key = 0
+  let inList = false
+  let listItems = []
+  let listType = 'ul'
+
+  const flushList = () => {
+    if (listItems.length > 0) {
+      const Tag = listType
+      elements.push(<Tag key={key++}>{listItems}</Tag>)
+      listItems = []
+      inList = false
+    }
+  }
+
+  const formatInline = (str) => {
+    // Bold **text** or __text__
+    const parts = []
+    let remaining = str
+    let ik = 0
+    const regex = /(\*\*|__)(.+?)\1|(\*|_)(.+?)\3|`([^`]+)`|("([^"]+)")/g
+    let lastIndex = 0
+    let match
+    while ((match = regex.exec(remaining)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(remaining.slice(lastIndex, match.index))
+      }
+      if (match[2]) {
+        parts.push(<strong key={ik++}>{match[2]}</strong>)
+      } else if (match[4]) {
+        parts.push(<em key={ik++}>{match[4]}</em>)
+      } else if (match[5]) {
+        parts.push(<code key={ik++} style={{ background: 'rgba(197,160,89,0.15)', padding: '1px 4px', borderRadius: '3px', fontSize: '0.8em' }}>{match[5]}</code>)
+      } else if (match[7]) {
+        parts.push(<q key={ik++}>{match[7]}</q>)
+      }
+      lastIndex = match.index + match[0].length
+    }
+    if (lastIndex < remaining.length) {
+      parts.push(remaining.slice(lastIndex))
+    }
+    return parts.length > 0 ? parts : str
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+
+    // Empty line
+    if (!trimmed) {
+      flushList()
+      continue
+    }
+
+    // Headings
+    const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)/)
+    if (headingMatch) {
+      flushList()
+      const level = headingMatch[1].length
+      const Tag = `h${Math.min(level + 2, 6)}` // h3-h6 in chat
+      elements.push(<Tag key={key++} style={{ margin: '0.4em 0 0.2em', fontSize: level === 1 ? '1em' : '0.9em' }}>{formatInline(headingMatch[2])}</Tag>)
+      continue
+    }
+
+    // Bullet list
+    const bulletMatch = trimmed.match(/^[-*•]\s+(.+)/)
+    if (bulletMatch) {
+      if (!inList || listType !== 'ul') flushList()
+      inList = true
+      listType = 'ul'
+      listItems.push(<li key={key++}>{formatInline(bulletMatch[1])}</li>)
+      continue
+    }
+
+    // Numbered list
+    const numMatch = trimmed.match(/^\d+[.)]\s+(.+)/)
+    if (numMatch) {
+      if (!inList || listType !== 'ol') flushList()
+      inList = true
+      listType = 'ol'
+      listItems.push(<li key={key++}>{formatInline(numMatch[1])}</li>)
+      continue
+    }
+
+    // Regular paragraph
+    flushList()
+    elements.push(<p key={key++} style={{ margin: '0 0 0.4em' }}>{formatInline(trimmed)}</p>)
+  }
+
+  flushList()
+  return elements
+}
+
 const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
@@ -250,7 +346,7 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
               {messages.map((msg, i) => (
                 <div key={i} className={`chat-message chat-message-${msg.role}`}>
                   <div className="chat-bubble">
-                    {msg.text}
+                    {msg.role === 'assistant' ? renderMarkdown(msg.text) : msg.text}
                     {msg.role === 'assistant' && (
                       <button
                         className="chat-speak-btn"

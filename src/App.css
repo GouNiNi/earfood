@@ -821,6 +821,28 @@
   border: 1px solid var(--border-color);
 }
 
+.chat-bubble p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-bubble ul,
+.chat-bubble ol {
+  margin: 0.3em 0;
+  padding-left: 1.2em;
+}
+
+.chat-bubble li {
+  margin-bottom: 0.15em;
+}
+
+.chat-bubble h3,
+.chat-bubble h4,
+.chat-bubble h5,
+.chat-bubble h6 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+}
+
 .chat-bubble-loading {
   display: flex;
   align-items: center;
