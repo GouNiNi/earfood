@@ -689,6 +689,9 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
           highlights={highlights}
           selectedText={selectedText}
           selectionRange={selectionRange}
+          currentSentenceIndex={currentSentenceIndex}
+          sentencePositions={sentencePositions}
+          sentences={sentences}
           onRefresh={refreshHighlights}
           onJumpToHighlight={handleJumpToHighlight}
           activeColor={activeColor}

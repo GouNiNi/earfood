@@ -18,6 +18,9 @@ const HighlightPanel = ({
   highlights,
   selectedText,
   selectionRange,
+  currentSentenceIndex,
+  sentencePositions,
+  sentences,
   onRefresh,
   onJumpToHighlight,
   activeColor,
@@ -28,16 +31,36 @@ const HighlightPanel = ({
   const [editTitle, setEditTitle] = useState('')
   const [copied, setCopied] = useState(false)
 
-  // Auto-apply highlight when a color is clicked and text is selected
+  // Auto-apply highlight when a color is clicked
+  // Mode 1: text selection exists → highlight the selection
+  // Mode 2: no selection but active sentence → highlight the active sentence
   const handleColorClick = async (colorValue) => {
     onColorChange(colorValue)
-    if (selectedText && selectionRange && colorValue) {
+    if (!colorValue) return
+
+    if (selectedText && selectionRange) {
+      // Mode 1: highlight the manual text selection
       const highlight = {
         id: crypto.randomUUID(),
         documentId,
         startPos: selectionRange.start,
         endPos: selectionRange.end,
         text: selectedText,
+        title: '',
+        color: colorValue,
+        createdAt: Date.now(),
+      }
+      await saveHighlight(highlight)
+      onRefresh()
+    } else if (currentSentenceIndex >= 0 && sentencePositions?.[currentSentenceIndex] && sentences?.[currentSentenceIndex]) {
+      // Mode 2: highlight the currently active sentence
+      const pos = sentencePositions[currentSentenceIndex]
+      const highlight = {
+        id: crypto.randomUUID(),
+        documentId,
+        startPos: pos.start,
+        endPos: pos.end,
+        text: sentences[currentSentenceIndex],
         title: '',
         color: colorValue,
         createdAt: Date.now(),
@@ -157,7 +180,7 @@ const HighlightPanel = ({
         </div>
       </div>
 
-      {selectedText && (
+      {(selectedText || (currentSentenceIndex >= 0 && sentences?.[currentSentenceIndex])) && (
         <div style={{
           padding: '0.5rem 1rem',
           borderBottom: '1px solid var(--border-color)',
@@ -165,10 +188,11 @@ const HighlightPanel = ({
           color: 'var(--text-muted)',
           fontStyle: 'italic',
         }}>
-          Sélection : « {selectedText.length > 60 ? selectedText.slice(0, 60) + '...' : selectedText} »
-          {activeColor ? (
-            <span style={{ color: 'var(--color-success)', marginLeft: '6px' }}>— cliquez une couleur pour surligner</span>
-          ) : null}
+          {selectedText
+            ? <>Sélection : « {selectedText.length > 60 ? selectedText.slice(0, 60) + '...' : selectedText} »</>
+            : <>Phrase active : « {sentences[currentSentenceIndex].length > 60 ? sentences[currentSentenceIndex].slice(0, 60) + '...' : sentences[currentSentenceIndex]} »</>
+          }
+          <span style={{ color: 'var(--accent-gold)', marginLeft: '6px' }}>— cliquez une couleur</span>
         </div>
       )}
 
@@ -198,7 +222,7 @@ const HighlightPanel = ({
         <div className="panel-empty">
           <Highlighter size={24} style={{ opacity: 0.3 }} />
           <p>Aucun surlignage</p>
-          <p style={{ fontSize: '0.8rem' }}>Sélectionnez du texte puis choisissez une couleur.</p>
+          <p style={{ fontSize: '0.8rem' }}>Cliquez une phrase ou sélectionnez du texte, puis choisissez une couleur.</p>
         </div>
       ) : filteredHighlights.length === 0 ? (
         <div className="panel-empty">
