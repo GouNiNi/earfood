@@ -19,7 +19,7 @@ const ImportModal = ({ onClose, onImported }) => {
     setProgress('Extraction du texte...')
 
     try {
-      const { text, title, author, chapters } = await extractText(file)
+      const { text, title, author, chapters, htmlContent } = await extractText(file)
 
       if (!text || text.length < 10) {
         throw new Error('Le document semble vide ou illisible.')
@@ -35,6 +35,7 @@ const ImportModal = ({ onClose, onImported }) => {
         filename: file.name,
         type: file.name.split('.').pop().toLowerCase(),
         content: text,
+        htmlContent: htmlContent || undefined,
         chapters: chapters || undefined,
         duration: estimateDuration(text),
         createdAt: Date.now(),

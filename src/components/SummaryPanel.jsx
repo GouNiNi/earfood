@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { BookOpen, Loader, Play, RefreshCw, AlertCircle } from 'lucide-react'
-import { getSummaries, saveSummary } from '../stores'
+import { getSummaries, saveSummary, getSettings } from '../stores'
 import { detectChapters, generateSummary, isGeminiReady } from '../utils/gemini'
 import { TTSEngine } from '../utils/tts'
 
@@ -10,7 +10,35 @@ const SummaryPanel = ({ documentId, documentContent, onConfigureApi }) => {
   const [loadingChapter, setLoadingChapter] = useState(null)
   const [error, setError] = useState(null)
   const [playingIndex, setPlayingIndex] = useState(null)
-  const summaryTtsRef = { current: null }
+  const summaryTtsRef = useRef(null)
+
+  // Initialize TTS engine for summaries
+  useEffect(() => {
+    const initTts = async () => {
+      summaryTtsRef.current = new TTSEngine()
+      const settings = await getSettings()
+      summaryTtsRef.current.setMode(settings.ttsMode || 'local')
+      if (settings.edgeVoice) summaryTtsRef.current.setEdgeVoice(settings.edgeVoice)
+      if (settings.sherpaVoice) summaryTtsRef.current.setSherpaVoice(settings.sherpaVoice)
+      summaryTtsRef.current.setTrimEndMs(settings.trimEndMs ?? 200)
+    }
+    initTts()
+
+    const handleSettingsChanged = async () => {
+      if (!summaryTtsRef.current) return
+      const settings = await getSettings()
+      summaryTtsRef.current.setMode(settings.ttsMode || 'local')
+      if (settings.edgeVoice) summaryTtsRef.current.setEdgeVoice(settings.edgeVoice)
+      if (settings.sherpaVoice) summaryTtsRef.current.setSherpaVoice(settings.sherpaVoice)
+      summaryTtsRef.current.setTrimEndMs(settings.trimEndMs ?? 200)
+    }
+    window.addEventListener('earfood-settings-changed', handleSettingsChanged)
+
+    return () => {
+      window.removeEventListener('earfood-settings-changed', handleSettingsChanged)
+      if (summaryTtsRef.current) summaryTtsRef.current.stop()
+    }
+  }, [])
 
   useEffect(() => {
     if (documentContent) {
@@ -59,27 +87,20 @@ const SummaryPanel = ({ documentId, documentContent, onConfigureApi }) => {
   }
 
   const handlePlaySummary = (summary, index) => {
-    // Arrêter si déjà en lecture
+    if (!summaryTtsRef.current) return
+
+    // Stop if already playing
     if (playingIndex === index) {
-      window.speechSynthesis.cancel()
+      summaryTtsRef.current.stop()
       setPlayingIndex(null)
       return
     }
 
-    window.speechSynthesis.cancel()
-    const utterance = new SpeechSynthesisUtterance(summary.summary)
-    utterance.lang = 'fr-FR'
-    utterance.rate = 1.0
-
-    const voices = window.speechSynthesis.getVoices()
-    const frVoice = voices.find(v => v.lang.startsWith('fr'))
-    if (frVoice) utterance.voice = frVoice
-
-    utterance.onend = () => setPlayingIndex(null)
-    utterance.onerror = () => setPlayingIndex(null)
-
+    summaryTtsRef.current.stop()
+    summaryTtsRef.current.loadText(summary.summary)
+    summaryTtsRef.current.onEnd = () => setPlayingIndex(null)
     setPlayingIndex(index)
-    window.speechSynthesis.speak(utterance)
+    summaryTtsRef.current.play()
   }
 
   const geminiReady = isGeminiReady()
@@ -177,4 +198,4 @@ const SummaryPanel = ({ documentId, documentContent, onConfigureApi }) => {
   )
 }
 
-export default SummaryPanel
+export default memo(SummaryPanel)

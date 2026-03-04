@@ -29,7 +29,7 @@
   background-color: var(--bg-paper);
 
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
+
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -62,7 +62,7 @@ button {
   border: 1px solid var(--border-color);
   background: white;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
   color: var(--text-main);
 }
 

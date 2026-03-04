@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Highlighter, Trash2, Palette, Search, Edit3, Check, X } from 'lucide-react'
+import { useState, memo } from 'react'
+import { Highlighter, Trash2, Palette, Search, Edit3, Check, X, Download, Copy } from 'lucide-react'
 import { saveHighlight, deleteHighlight as deleteHl } from '../stores'
+import { formatTime } from '../utils/formatTime'
 import Fuse from 'fuse.js'
 
 const HIGHLIGHT_COLORS = [
@@ -12,6 +13,7 @@ const HIGHLIGHT_COLORS = [
 
 const HighlightPanel = ({
   documentId,
+  documentTitle,
   highlights,
   selectedText,
   selectionRange,
@@ -25,6 +27,7 @@ const HighlightPanel = ({
   const [searchQuery, setSearchQuery] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
+  const [copied, setCopied] = useState(false)
 
   const handleAddHighlight = async () => {
     if (!selectedText || !selectionRange) return
@@ -57,6 +60,50 @@ const HighlightPanel = ({
     setEditingId(null)
     setEditTitle('')
     onRefresh()
+  }
+
+  // Export markdown
+  const generateMarkdown = () => {
+    if (highlights.length === 0) return ''
+    let md = `# Document : ${documentTitle}\n## Passages surlignés\n\n`
+    highlights.forEach((hl, i) => {
+      const estimatedSeconds = Math.floor(hl.startPos / 15)
+      const title = hl.title ? ` — ${hl.title}` : ''
+      md += `**Passage ${i + 1}${title}** (position: ${formatTime(estimatedSeconds)})\n`
+      md += `> ${hl.text}\n\n`
+    })
+    return md.trim()
+  }
+
+  const handleCopy = async () => {
+    const md = generateMarkdown()
+    try {
+      await navigator.clipboard.writeText(md)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      const textarea = document.createElement('textarea')
+      textarea.value = md
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleDownload = () => {
+    const md = generateMarkdown()
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${documentTitle} - Passages surlignés.md`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   // Filtrer les highlights avec Fuse.js si recherche active
@@ -209,9 +256,23 @@ const HighlightPanel = ({
           ))}
         </div>
       )}
+
+      {/* Export buttons */}
+      {highlights.length > 0 && (
+        <div className="export-actions">
+          <button onClick={handleCopy} style={{ flex: 1 }}>
+            {copied ? <Check size={16} /> : <Copy size={16} />}
+            <span style={{ marginLeft: '8px' }}>{copied ? 'Copié !' : 'Copier .md'}</span>
+          </button>
+          <button onClick={handleDownload} className="primary" style={{ flex: 1 }}>
+            <Download size={16} />
+            <span style={{ marginLeft: '8px' }}>Télécharger .md</span>
+          </button>
+        </div>
+      )}
     </div>
   )
 }
 
 export { HIGHLIGHT_COLORS }
-export default HighlightPanel
+export default memo(HighlightPanel)

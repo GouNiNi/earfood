@@ -1,6 +1,7 @@
+import { memo } from 'react'
 import { List } from 'lucide-react'
 
-const ChapterPanel = ({ chapters, currentCharPos, onJumpToChapter }) => {
+const ChapterPanel = memo(function ChapterPanel({ chapters, currentCharPos, onJumpToChapter }) {
   if (!chapters || chapters.length === 0) {
     return (
       <div className="panel-container">
@@ -59,6 +60,6 @@ const ChapterPanel = ({ chapters, currentCharPos, onJumpToChapter }) => {
       </div>
     </div>
   )
-}
+})
 
 export default ChapterPanel

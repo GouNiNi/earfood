@@ -19,12 +19,14 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
       const docs = await getAllDocuments()
       setDocuments(docs)
 
-      // Charger la progression pour chaque document
-      const progMap = {}
-      for (const doc of docs) {
-        const prog = await getProgress(doc.id)
-        if (prog) progMap[doc.id] = prog
-      }
+      // Charger la progression pour chaque document en parallèle
+      const progEntries = await Promise.all(
+        docs.map(async (doc) => {
+          const prog = await getProgress(doc.id)
+          return prog ? [doc.id, prog] : null
+        })
+      )
+      const progMap = Object.fromEntries(progEntries.filter(Boolean))
       setProgressMap(progMap)
     } catch (error) {
       console.error("Erreur lors du chargement:", error)
@@ -120,7 +122,7 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
 
                   <div className="progress-container">
                     <div className="progress-bar">
-                      <div className="progress-fill" style={{ width: `${pct}%` }}></div>
+                      <div className="progress-fill" style={{ transform: `scaleX(${pct / 100})` }}></div>
                     </div>
                     <span className="progress-text">{pct}% écouté</span>
                   </div>

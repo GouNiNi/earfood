@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { Bookmark, Plus, Trash2, MapPin } from 'lucide-react'
 import { formatTime } from '../utils/formatTime'
 import { saveBookmark, deleteBookmark as deleteBm } from '../stores'
@@ -96,4 +96,4 @@ const BookmarkPanel = ({ documentId, bookmarks, currentTime, onJumpTo, onRefresh
   )
 }
 
-export default BookmarkPanel
+export default memo(BookmarkPanel)

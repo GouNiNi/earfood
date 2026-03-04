@@ -28,7 +28,7 @@ const Player = ({
         <div className="player-progress-track">
           <div
             className="player-progress-fill"
-            style={{ width: `${percentage}%` }}
+            style={{ transform: `scaleX(${percentage / 100})` }}
           />
           <div
             className="player-progress-thumb"

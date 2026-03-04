@@ -80,7 +80,8 @@
 .progress-fill {
   height: 100%;
   background: var(--accent-gold);
-  transition: width 0.3s ease;
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 
 .progress-text {
@@ -106,8 +107,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(26, 43, 60, 0.4);
-  backdrop-filter: blur(4px);
+  background: rgba(26, 43, 60, 0.7);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -238,7 +238,7 @@
   cursor: pointer;
   font-size: 0.8rem;
   color: var(--text-muted);
-  transition: all 0.2s ease;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .reader-action-btn:hover {
@@ -278,7 +278,8 @@
   height: 100%;
   background: var(--accent-gold);
   border-radius: 3px;
-  transition: width 0.3s ease;
+  transform-origin: left;
+  transition: transform 0.3s ease;
 }
 
 .player-progress-thumb {
@@ -292,6 +293,7 @@
   border-radius: 50%;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
   transition: left 0.3s ease;
+  will-change: left;
 }
 
 .player-time {
@@ -344,7 +346,7 @@
   align-items: center;
   justify-content: center;
   padding: 0;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s;
 }
 
 .player-btn-main:hover {
@@ -470,7 +472,7 @@
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background-color 0.15s;
 }
 
 .bookmark-item:last-child {
@@ -564,7 +566,7 @@
   padding: 0.6rem 1rem;
   border-bottom: 1px solid var(--border-color);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background-color 0.15s;
 }
 
 .highlight-item:last-child {
@@ -988,6 +990,100 @@
   accent-color: var(--accent-gold);
 }
 
+/* === CHAT LAYOUT (sidebar + main) === */
+.chat-layout {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.chat-sidebar {
+  width: 33%;
+  max-width: 200px;
+  border-right: 1px solid var(--border-color);
+  overflow-y: auto;
+  display: none;
+}
+
+.chat-sidebar.chat-sidebar-open {
+  display: block;
+}
+
+.chat-sidebar-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.chat-sidebar-item {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.chat-sidebar-item:hover {
+  background: rgba(197, 160, 89, 0.06);
+}
+
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* === RICH TEXT === */
+.reader-rich-text h1,
+.reader-rich-text h2,
+.reader-rich-text h3,
+.reader-rich-text h4,
+.reader-rich-text h5,
+.reader-rich-text h6 {
+  font-family: var(--font-serif);
+  margin: 1.2em 0 0.4em;
+  color: var(--text-main);
+}
+
+.reader-rich-text h1 { font-size: 1.6rem; }
+.reader-rich-text h2 { font-size: 1.3rem; }
+.reader-rich-text h3 { font-size: 1.1rem; }
+
+.reader-rich-text p {
+  margin: 0 0 0.8em;
+}
+
+.reader-rich-text img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 1rem auto;
+  border-radius: 4px;
+}
+
+.reader-rich-text blockquote {
+  margin: 0.8em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--accent-gold);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.reader-rich-text ul,
+.reader-rich-text ol {
+  padding-left: 1.5em;
+  margin: 0 0 0.8em;
+}
+
+.reader-rich-text li {
+  margin-bottom: 0.3em;
+}
+
+.reader-rich-text hr {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: 1.5em 0;
+}
+
 /* === ANIMATIONS === */
 @keyframes spin {
   from { transform: rotate(0deg); }
@@ -1031,5 +1127,28 @@
 
   .chat-messages {
     max-height: 180px;
+  }
+
+  .chat-sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 10;
+    background: var(--bg-paper);
+    width: 75%;
+    max-width: 250px;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  }
+
+  .chat-sidebar.chat-sidebar-open {
+    display: block;
+    transform: translateX(0);
+  }
+
+  .chat-layout {
+    position: relative;
   }
 }

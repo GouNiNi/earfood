@@ -98,7 +98,12 @@ export async function generateSummary(textSegment, chapterTitle) {
   // Limiter le texte envoyé (Gemini Flash supporte beaucoup mais on reste raisonnable)
   const truncated = textSegment.slice(0, 8000)
 
-  const prompt = `Tu es un assistant de lecture intelligent. Résume le passage suivant en français, de manière concise et claire (3-5 phrases maximum). Le résumé doit capturer les idées clés et être prêt à être lu à voix haute en 30 secondes maximum.
+  const prompt = `Tu es un assistant de lecture intelligent et cultivé. Produis un résumé enrichi du passage suivant en français, lisible à voix haute en environ 60 secondes.
+
+Structure attendue :
+1. Un paragraphe de synthèse (5-8 phrases) qui capture l'essentiel du passage
+2. Une liste à puces des idées principales (3-5 points clés)
+3. 1-2 citations ou termes clés remarquables du texte (entre guillemets)
 
 ${chapterTitle ? `Titre du chapitre : "${chapterTitle}"` : ''}
 
@@ -107,7 +112,7 @@ Texte à résumer :
 ${truncated}
 """
 
-Résumé concis en français :`
+Résumé enrichi en français :`
 
   try {
     const result = await model.generateContent(prompt)

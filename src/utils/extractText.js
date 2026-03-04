@@ -136,6 +136,7 @@ async function extractFromEPUB(file) {
   }
 
   let fullText = ''
+  const htmlParts = []
 
   // Map section href → char offset for TOC mapping
   const sectionOffsets = {}
@@ -146,6 +147,30 @@ async function extractFromEPUB(file) {
       const doc = await section.load(book.load.bind(book))
       if (doc && doc.body) {
         fullText += doc.body.textContent + '\n\n'
+
+        // Resolve images to inline base64
+        const imgs = doc.body.querySelectorAll('img')
+        for (const img of imgs) {
+          const src = img.getAttribute('src')
+          if (src) {
+            try {
+              const blob = await book.archive.getBlob(src)
+              if (blob) {
+                const dataUrl = await new Promise((resolve) => {
+                  const reader = new FileReader()
+                  reader.onload = () => resolve(reader.result)
+                  reader.onerror = () => resolve('')
+                  reader.readAsDataURL(blob)
+                })
+                if (dataUrl) img.setAttribute('src', dataUrl)
+              }
+            } catch (e) {
+              // Image non résolue, on laisse le src original
+            }
+          }
+        }
+
+        htmlParts.push(doc.body.innerHTML)
       }
     } catch (e) {
       // Section illisible, on continue
@@ -179,6 +204,7 @@ async function extractFromEPUB(file) {
 
   return {
     text: fullText.trim() || `Contenu extrait de ${file.name}`,
+    htmlContent: htmlParts.length > 0 ? htmlParts.join('<hr/>') : undefined,
     title,
     author,
     chapters: chapters.length > 0 ? chapters : undefined,
@@ -190,10 +216,19 @@ async function extractFromEPUB(file) {
  */
 async function extractFromDOCX(file) {
   const arrayBuffer = await file.arrayBuffer()
-  const result = await mammoth.extractRawText({ arrayBuffer })
+
+  // Extract HTML for rich rendering
+  const htmlResult = await mammoth.convertToHtml({ arrayBuffer })
+  const html = htmlResult.value
+
+  // Extract plain text from the HTML
+  const parser = new DOMParser()
+  const parsed = parser.parseFromString(html, 'text/html')
+  const text = parsed.body.textContent || ''
 
   return {
-    text: result.value.trim(),
+    text: text.trim(),
+    htmlContent: html || undefined,
     title: file.name.replace(/\.docx?$/i, ''),
     author: 'Auteur inconnu'
   }

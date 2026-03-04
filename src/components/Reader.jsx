@@ -1,11 +1,10 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { ArrowLeft, Bookmark, Highlighter, FileText, BookOpen, MessageCircle, Settings, List } from 'lucide-react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import { ArrowLeft, Bookmark, Highlighter, BookOpen, MessageCircle, Settings, List } from 'lucide-react'
 import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings } from '../stores'
 import { TTSEngine } from '../utils/tts'
 import Player from './Player'
 import BookmarkPanel from './BookmarkPanel'
 import HighlightPanel from './HighlightPanel'
-import ExportPanel from './ExportPanel'
 import SummaryPanel from './SummaryPanel'
 import ChatPanel from './ChatPanel'
 import ChapterPanel from './ChapterPanel'
@@ -146,15 +145,15 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     }
   }
 
-  const refreshBookmarks = async () => {
+  const refreshBookmarks = useCallback(async () => {
     const bm = await getBookmarks(documentId)
     setBookmarks(bm)
-  }
+  }, [documentId])
 
-  const refreshHighlights = async () => {
+  const refreshHighlights = useCallback(async () => {
     const hl = await getHighlights(documentId)
     setHighlights(hl)
-  }
+  }, [documentId])
 
   const handleSaveProgress = useCallback(async () => {
     if (!ttsRef.current || !doc) return
@@ -253,23 +252,23 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     setCurrentTime(Math.floor((pct / 100) * totalDuration))
   }
 
-  const handleJumpToBookmark = (position) => {
+  const handleJumpToBookmark = useCallback((position) => {
     const pct = totalDuration > 0 ? (position / totalDuration) * 100 : 0
     handleSeek(pct)
-  }
+  }, [totalDuration])
 
-  const handleJumpToHighlight = (highlight) => {
+  const handleJumpToHighlight = useCallback((highlight) => {
     if (!ttsRef.current || !doc) return
     ttsRef.current.seekToCharPosition(highlight.startPos)
-  }
+  }, [doc])
 
-  const handleJumpToChapter = (charPos) => {
+  const handleJumpToChapter = useCallback((charPos) => {
     if (!ttsRef.current || !doc) return
     ttsRef.current.seekToCharPosition(charPos)
     const pct = (charPos / doc.content.length) * 100
     setPercentage(pct)
     setCurrentTime(Math.floor((pct / 100) * totalDuration))
-  }
+  }, [doc, totalDuration])
 
   const togglePanel = (panel) => {
     setActivePanel(activePanel === panel ? null : panel)
@@ -285,6 +284,141 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     if (!ttsRef.current) return []
     return ttsRef.current.sentencePositions
   }, [doc])
+
+  // Render rich HTML text with sentence highlighting
+  const renderRichText = useMemo(() => {
+    if (!doc?.htmlContent || sentencePositions.length === 0) return null
+
+    const parser = new DOMParser()
+    const parsed = parser.parseFromString(doc.htmlContent, 'text/html')
+    let keyCounter = 0
+    let charOffset = 0
+
+    // Build a map of charOffset → sentence index for quick lookup
+    const findSentenceAt = (offset) => {
+      for (let i = 0; i < sentencePositions.length; i++) {
+        const pos = sentencePositions[i]
+        if (pos && offset >= pos.start && offset < pos.end) return i
+      }
+      return -1
+    }
+
+    const processNode = (node) => {
+      if (node.nodeType === 3) {
+        // Text node - split at sentence boundaries
+        const text = node.textContent
+        if (!text) return null
+        const fragments = []
+        let localOffset = 0
+
+        while (localOffset < text.length) {
+          const globalPos = charOffset + localOffset
+          const sentIdx = findSentenceAt(globalPos)
+
+          if (sentIdx >= 0) {
+            const pos = sentencePositions[sentIdx]
+            const sentEnd = pos.end - charOffset
+            const sliceEnd = Math.min(sentEnd, text.length)
+            const slice = text.slice(localOffset, sliceEnd)
+
+            if (slice) {
+              const isCurrent = sentIdx === currentSentenceIndex
+              const overlapping = highlights.filter(hl =>
+                hl.startPos < pos.end && hl.endPos > pos.start
+              )
+              const hlColor = overlapping.length > 0 ? overlapping[0].color : null
+
+              fragments.push(
+                <span
+                  key={keyCounter++}
+                  data-start={pos.start}
+                  data-end={pos.end}
+                  ref={(el) => { if (el) sentenceRefs.current[sentIdx] = el }}
+                  className={`reader-sentence ${isCurrent ? 'reader-sentence-active' : ''}`}
+                  style={{
+                    backgroundColor: isCurrent
+                      ? 'var(--color-highlight-1)'
+                      : hlColor ? hlColor + '80' : 'transparent',
+                  }}
+                  onClick={() => {
+                    if (ttsRef.current && pos) {
+                      ttsRef.current.seekToCharPosition(pos.start)
+                      if (!isPlaying) {
+                        ttsRef.current.play()
+                        setIsPlaying(true)
+                      }
+                    }
+                  }}
+                >
+                  {slice}
+                </span>
+              )
+            }
+            localOffset = sliceEnd
+          } else {
+            // No sentence match, output char by char until we find one
+            let nextMatch = localOffset + 1
+            while (nextMatch < text.length && findSentenceAt(charOffset + nextMatch) < 0) {
+              nextMatch++
+            }
+            fragments.push(<span key={keyCounter++}>{text.slice(localOffset, nextMatch)}</span>)
+            localOffset = nextMatch
+          }
+        }
+
+        charOffset += text.length
+        return fragments.length === 1 ? fragments[0] : fragments
+      }
+
+      if (node.nodeType !== 1) return null
+
+      const el = node
+      const tag = el.tagName.toLowerCase()
+
+      // Skip script/style
+      if (tag === 'script' || tag === 'style') return null
+
+      // Allowed tags
+      const allowedTags = ['p', 'div', 'span', 'strong', 'b', 'em', 'i', 'u',
+        'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+        'ul', 'ol', 'li', 'blockquote', 'br', 'hr', 'img', 'a', 'sup', 'sub']
+
+      const children = []
+      for (const child of el.childNodes) {
+        const result = processNode(child)
+        if (result !== null) {
+          if (Array.isArray(result)) {
+            children.push(...result)
+          } else {
+            children.push(result)
+          }
+        }
+      }
+
+      if (tag === 'br') return <br key={keyCounter++} />
+      if (tag === 'hr') return <hr key={keyCounter++} />
+      if (tag === 'img') {
+        return <img key={keyCounter++} src={el.getAttribute('src')} alt={el.getAttribute('alt') || ''} />
+      }
+
+      const useTag = allowedTags.includes(tag) ? tag : 'span'
+      return React.createElement(useTag, { key: keyCounter++ }, ...children)
+    }
+
+    const bodyChildren = []
+    for (const child of parsed.body.childNodes) {
+      const result = processNode(child)
+      if (result !== null) {
+        if (Array.isArray(result)) {
+          bodyChildren.push(...result)
+        } else {
+          bodyChildren.push(result)
+        }
+      }
+    }
+
+    return bodyChildren
+  }, [doc, sentencePositions, currentSentenceIndex, highlights, isPlaying])
 
   // Render text with highlights
   const renderText = () => {
@@ -366,7 +500,18 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
 
       {/* Zone de texte */}
       <div className="reader-text-view">
-        {renderText()}
+        {doc?.htmlContent && renderRichText ? (
+          <div
+            ref={textViewRef}
+            className="reader-text-content reader-rich-text"
+            onMouseUp={handleTextSelection}
+            onTouchEnd={handleTextSelection}
+          >
+            {renderRichText}
+          </div>
+        ) : (
+          renderText()
+        )}
       </div>
 
       {/* Barre d'actions */}
@@ -406,13 +551,6 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
           <MessageCircle size={16} />
           <span>Chat</span>
         </button>
-        <button
-          className={`reader-action-btn ${activePanel === 'export' ? 'active' : ''}`}
-          onClick={() => togglePanel('export')}
-        >
-          <FileText size={16} />
-          <span>Export</span>
-        </button>
       </div>
 
       {/* Panneaux contextuels */}
@@ -435,6 +573,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
       {activePanel === 'highlights' && (
         <HighlightPanel
           documentId={documentId}
+          documentTitle={doc.title}
           highlights={highlights}
           selectedText={selectedText}
           selectionRange={selectionRange}
@@ -458,12 +597,6 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
           documentId={documentId}
           documentContent={doc.content}
           onConfigureApi={onOpenSettings}
-        />
-      )}
-      {activePanel === 'export' && (
-        <ExportPanel
-          documentTitle={doc.title}
-          highlights={highlights}
         />
       )}
 
