@@ -39,23 +39,37 @@ export function detectChapters(text, nativeChapters) {
   const chapters = []
   let currentPos = 0
 
-  // Patterns de titres de chapitres
+  // Patterns de titres de chapitres (strict)
   const chapterPatterns = [
-    /^(chapitre|chapter|partie|part)\s+\d+/i,
-    /^(I{1,3}|IV|V|VI{0,3}|IX|X{0,3})[.\s]/,
-    /^\d+[.\s]+[A-Z]/,
+    /^(chapitre|chapter|partie|part|section|acte|livre|tome)\s+[\dIVXLCDM]+/i,
+    /^(prologue|épilogue|epilogue|préface|preface|introduction|conclusion|avant-propos|postface)/i,
+    /^(I{1,3}|IV|V|VI{0,3}|IX|X{1,3})[.\s\-–—:]/,
+    /^\d{1,3}[.\s\-–—:]\s*[A-ZÀ-Ü]/,
     /^#{1,3}\s+/,
   ]
+
+  // Patterns plus souples: ligne courte précédée/suivie d'une ligne vide
+  const softTitlePattern = (line, prevLine, nextLine) => {
+    if (line.length < 4 || line.length > 120) return false
+    const isIsolated = (!prevLine || prevLine.trim() === '') && (!nextLine || nextLine.trim() === '')
+    if (!isIsolated) return false
+    // Starts with uppercase, not a regular sentence (no period at end)
+    if (/^[A-ZÀ-Ü]/.test(line) && !line.endsWith('.') && !line.endsWith(',')) return true
+    return false
+  }
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
     const lineStart = text.indexOf(lines[i], currentPos)
 
-    const isChapterTitle = line.length > 2 && line.length < 100 &&
+    const isStrictChapter = line.length > 2 && line.length < 120 &&
       (chapterPatterns.some(p => p.test(line)) ||
-       (line === line.toUpperCase() && line.length > 5 && line.length < 80))
+       (line === line.toUpperCase() && line.length > 4 && line.length < 80 && /[A-ZÀ-Ü]/.test(line)))
 
-    if (isChapterTitle) {
+    const isSoftChapter = !isStrictChapter &&
+      softTitlePattern(line, i > 0 ? lines[i - 1] : null, i < lines.length - 1 ? lines[i + 1] : null)
+
+    if (isStrictChapter || isSoftChapter) {
       chapters.push({
         title: line.replace(/^#+\s*/, '').trim(),
         start: lineStart >= 0 ? lineStart : currentPos,
@@ -65,17 +79,31 @@ export function detectChapters(text, nativeChapters) {
     currentPos = lineStart >= 0 ? lineStart + lines[i].length : currentPos + lines[i].length + 1
   }
 
-  // Si aucun chapitre détecté, créer des segments de ~3000 caractères
+  // Si aucun chapitre détecté, créer des segments à chaque double saut de ligne (~5000 chars min)
   if (chapters.length === 0) {
-    const segmentSize = 3000
-    for (let i = 0; i < text.length; i += segmentSize) {
-      const segEnd = Math.min(i + segmentSize, text.length)
-      // Trouver la fin de phrase la plus proche
-      const snippet = text.slice(i, Math.min(i + 50, text.length))
-      chapters.push({
-        title: `Section ${Math.floor(i / segmentSize) + 1}`,
-        start: i,
-      })
+    const MIN_SEGMENT = 5000
+    let lastStart = 0
+    const doubleNewlines = [...text.matchAll(/\n\s*\n/g)]
+
+    for (const match of doubleNewlines) {
+      if (match.index - lastStart >= MIN_SEGMENT) {
+        // Use the first meaningful words after this break as title
+        const after = text.slice(match.index).replace(/^\s+/, '')
+        const firstLine = after.split('\n')[0].trim()
+        const title = firstLine.length > 60
+          ? firstLine.slice(0, 57) + '…'
+          : firstLine || `Passage ${chapters.length + 1}`
+
+        chapters.push({ title, start: match.index + match[0].length })
+        lastStart = match.index
+      }
+    }
+
+    // Ensure first segment always exists
+    if (chapters.length === 0 || chapters[0].start > 0) {
+      const firstLine = text.split('\n').find(l => l.trim())?.trim() || 'Début'
+      const title = firstLine.length > 60 ? firstLine.slice(0, 57) + '…' : firstLine
+      chapters.unshift({ title, start: 0 })
     }
   }
 
