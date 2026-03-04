@@ -450,55 +450,107 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     return bodyChildren
   }, [doc, sentencePositions, currentSentenceIndex, highlights, isPlaying])
 
-  // Render text with highlights
+  // Detect if a sentence looks like a heading
+  const isHeading = useCallback((sentence) => {
+    const trimmed = sentence.trim()
+    if (trimmed.length < 3 || trimmed.length > 120) return false
+    // Numbered chapter patterns
+    if (/^(chapitre|chapter|partie|part)\s+\d+/i.test(trimmed)) return 'h2'
+    if (/^(I{1,3}|IV|V|VI{0,3}|IX|X{0,3})[.\s]/i.test(trimmed)) return 'h3'
+    if (/^\d+[.\s]+[A-Z]/.test(trimmed) && trimmed.length < 80) return 'h3'
+    if (/^#{1,3}\s+/.test(trimmed)) return 'h2'
+    // All caps short line
+    if (trimmed === trimmed.toUpperCase() && trimmed.length > 5 && trimmed.length < 80 && /[A-Z]/.test(trimmed)) return 'h2'
+    return false
+  }, [])
+
+  // Group sentences into paragraphs based on gaps in the source text
   const renderText = () => {
     if (!doc) return null
+
+    // Build paragraph groups: detect double newlines between sentences
+    const groups = []
+    let currentGroup = []
+
+    for (let i = 0; i < sentences.length; i++) {
+      const pos = sentencePositions[i]
+      const prevPos = i > 0 ? sentencePositions[i - 1] : null
+
+      // Check if there's a paragraph break between previous and current sentence
+      if (prevPos && pos && doc.content) {
+        const between = doc.content.slice(prevPos.end, pos.start)
+        if (/\n\s*\n/.test(between)) {
+          if (currentGroup.length > 0) {
+            groups.push(currentGroup)
+            currentGroup = []
+          }
+        }
+      }
+      currentGroup.push(i)
+    }
+    if (currentGroup.length > 0) groups.push(currentGroup)
+
+    const renderSentenceSpan = (index) => {
+      const pos = sentencePositions[index]
+      const sentence = sentences[index]
+      const isCurrent = index === currentSentenceIndex
+
+      const overlappingHighlights = highlights.filter(hl =>
+        pos && hl.startPos < pos.end && hl.endPos > pos.start
+      )
+      const highlightColor = overlappingHighlights.length > 0
+        ? overlappingHighlights[0].color
+        : null
+
+      return (
+        <span
+          key={index}
+          ref={(el) => { sentenceRefs.current[index] = el }}
+          data-start={pos?.start}
+          data-end={pos?.end}
+          className={`reader-sentence ${isCurrent ? 'reader-sentence-active' : ''}`}
+          style={{
+            backgroundColor: isCurrent
+              ? 'var(--color-highlight-1)'
+              : highlightColor
+                ? highlightColor + '80'
+                : 'transparent',
+          }}
+          onClick={() => {
+            if (ttsRef.current && pos) {
+              ttsRef.current.seekToCharPosition(pos.start)
+              if (!isPlaying && autoPlay) {
+                ttsRef.current.play()
+                setIsPlaying(true)
+              }
+            }
+          }}
+        >
+          {sentence}{' '}
+        </span>
+      )
+    }
 
     return (
       <div
         ref={textViewRef}
-        className="reader-text-content"
+        className="reader-text-content reader-rich-text"
         onMouseUp={handleTextSelection}
         onTouchEnd={handleTextSelection}
       >
-        {sentences.map((sentence, index) => {
-          const pos = sentencePositions[index]
-          const isCurrent = index === currentSentenceIndex
-
-          const overlappingHighlights = highlights.filter(hl =>
-            pos && hl.startPos < pos.end && hl.endPos > pos.start
-          )
-
-          const highlightColor = overlappingHighlights.length > 0
-            ? overlappingHighlights[0].color
-            : null
-
+        {groups.map((group, gi) => {
+          // Single-sentence group that looks like a heading
+          if (group.length === 1) {
+            const headingTag = isHeading(sentences[group[0]])
+            if (headingTag) {
+              const Tag = headingTag
+              return <Tag key={`g${gi}`}>{renderSentenceSpan(group[0])}</Tag>
+            }
+          }
           return (
-            <span
-              key={index}
-              ref={(el) => { sentenceRefs.current[index] = el }}
-              data-start={pos?.start}
-              data-end={pos?.end}
-              className={`reader-sentence ${isCurrent ? 'reader-sentence-active' : ''}`}
-              style={{
-                backgroundColor: isCurrent
-                  ? 'var(--color-highlight-1)'
-                  : highlightColor
-                    ? highlightColor + '80'
-                    : 'transparent',
-              }}
-              onClick={() => {
-                if (ttsRef.current && pos) {
-                  ttsRef.current.seekToCharPosition(pos.start)
-                  if (!isPlaying && autoPlay) {
-                    ttsRef.current.play()
-                    setIsPlaying(true)
-                  }
-                }
-              }}
-            >
-              {sentence}{' '}
-            </span>
+            <p key={`g${gi}`}>
+              {group.map(idx => renderSentenceSpan(idx))}
+            </p>
           )
         })}
       </div>
