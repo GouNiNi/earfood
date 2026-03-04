@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ArrowLeft, Bookmark, Highlighter, BookOpen, Sparkles, Settings, List } from 'lucide-react'
 import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings } from '../stores'
 import { TTSEngine } from '../utils/tts'
+import { detectChapters } from '../utils/gemini'
 import Player from './Player'
 import BookmarkPanel from './BookmarkPanel'
 import HighlightPanel from './HighlightPanel'
@@ -272,6 +273,12 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
   const togglePanel = (panel) => {
     setActivePanel(activePanel === panel ? null : panel)
   }
+
+  // Detect chapters (native or heuristic fallback)
+  const chapters = useMemo(() => {
+    if (!doc) return []
+    return detectChapters(doc.content, doc.chapters)
+  }, [doc])
 
   // Memoize sentences from TTS
   const sentences = useMemo(() => {
@@ -555,7 +562,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
       {/* Panneaux contextuels */}
       {activePanel === 'chapters' && (
         <ChapterPanel
-          chapters={doc.chapters || []}
+          chapters={chapters}
           currentCharPos={sentencePositions[currentSentenceIndex]?.start || 0}
           onJumpToChapter={handleJumpToChapter}
         />
@@ -593,6 +600,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
         <ChatPanel
           documentId={documentId}
           documentContent={doc.content}
+          chapters={chapters}
           onConfigureApi={onOpenSettings}
         />
       )}

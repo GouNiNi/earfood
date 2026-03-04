@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, memo } from 'react'
 import { MessageCircle, Send, Mic, MicOff, Volume2, Trash2, Loader, BookOpen } from 'lucide-react'
 import { getChatHistory, saveChatHistory, clearChatHistory, getSettings } from '../stores'
-import { askAboutDocument, isGeminiReady, detectChapters } from '../utils/gemini'
+import { askAboutDocument, isGeminiReady } from '../utils/gemini'
 import { TTSEngine } from '../utils/tts'
 
 // Simple markdown to JSX renderer for chat bubbles
@@ -100,7 +100,7 @@ function renderMarkdown(text) {
   return elements
 }
 
-const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
+const ChatPanel = ({ documentId, documentContent, chapters: chaptersProp, onConfigureApi }) => {
   const [messages, setMessages] = useState([])
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -112,8 +112,8 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
   const [speakingIndex, setSpeakingIndex] = useState(null)
 
   // Chapters dropdown state
-  const [chapters, setChapters] = useState([])
   const [chaptersOpen, setChaptersOpen] = useState(false)
+  const chapters = chaptersProp || []
 
   // Initialize TTS engine for chat voice
   useEffect(() => {
@@ -145,11 +145,6 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
 
   useEffect(() => {
     loadHistory()
-    // Load chapters for dropdown
-    if (documentContent) {
-      const detected = detectChapters(documentContent)
-      setChapters(detected)
-    }
     return () => {
       if (recognitionRef.current) recognitionRef.current.stop()
     }
