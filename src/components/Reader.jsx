@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ArrowLeft, Bookmark, Highlighter, BookOpen, Sparkles, Settings, List } from 'lucide-react'
-import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings } from '../stores'
+import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings, saveSettings } from '../stores'
 import { TTSEngine } from '../utils/tts'
 import { detectChapters } from '../utils/gemini'
 import Player from './Player'
@@ -33,6 +33,10 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
 
   // Highlight color (null = no color selected)
   const [activeColor, setActiveColor] = useState(null)
+
+  // Auto-play state
+  const [autoPlay, setAutoPlay] = useState(false)
+  const autoPlayBeforeHighlightRef = useRef(null)
   const [selectedText, setSelectedText] = useState('')
   const [selectionRange, setSelectionRange] = useState(null)
 
@@ -88,6 +92,8 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     }
 
     initTts()
+    // Load autoPlay setting
+    getSettings().then(s => setAutoPlay(!!s.autoPlay))
     updateAnalytics({ newSession: true })
 
     return () => {
@@ -270,8 +276,26 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     setCurrentTime(Math.floor((pct / 100) * totalDuration))
   }, [doc, totalDuration])
 
+  const handleToggleAutoPlay = useCallback(async () => {
+    const next = !autoPlay
+    setAutoPlay(next)
+    const s = await getSettings()
+    await saveSettings({ ...s, autoPlay: next })
+  }, [autoPlay])
+
   const togglePanel = (panel) => {
-    setActivePanel(activePanel === panel ? null : panel)
+    const newPanel = activePanel === panel ? null : panel
+    // Suspend autoPlay when entering highlight panel, restore when leaving
+    if (newPanel === 'highlights') {
+      autoPlayBeforeHighlightRef.current = autoPlay
+      setAutoPlay(false)
+    } else if (activePanel === 'highlights' && newPanel !== 'highlights') {
+      if (autoPlayBeforeHighlightRef.current) {
+        setAutoPlay(true)
+        autoPlayBeforeHighlightRef.current = null
+      }
+    }
+    setActivePanel(newPanel)
   }
 
   // Detect chapters (native or heuristic fallback)
@@ -349,7 +373,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
                   onClick={() => {
                     if (ttsRef.current && pos) {
                       ttsRef.current.seekToCharPosition(pos.start)
-                      if (!isPlaying) {
+                      if (!isPlaying && autoPlay) {
                         ttsRef.current.play()
                         setIsPlaying(true)
                       }
@@ -466,7 +490,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
               onClick={() => {
                 if (ttsRef.current && pos) {
                   ttsRef.current.seekToCharPosition(pos.start)
-                  if (!isPlaying) {
+                  if (!isPlaying && autoPlay) {
                     ttsRef.current.play()
                     setIsPlaying(true)
                   }
@@ -613,11 +637,13 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
         percentage={percentage}
         rate={rate}
         ttsMode={ttsMode}
+        autoPlay={autoPlay}
         onPlayPause={handlePlayPause}
         onSkipBack={handleSkipBack}
         onSkipForward={handleSkipForward}
         onRateChange={handleRateChange}
         onSeek={handleSeek}
+        onToggleAutoPlay={handleToggleAutoPlay}
       />
     </div>
   )

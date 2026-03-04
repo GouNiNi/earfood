@@ -8,11 +8,13 @@ const Player = ({
   percentage,
   rate,
   ttsMode,
+  autoPlay,
   onPlayPause,
   onSkipBack,
   onSkipForward,
   onRateChange,
   onSeek,
+  onToggleAutoPlay,
 }) => {
   const handleProgressClick = (e) => {
     const rect = e.currentTarget.getBoundingClientRect()
@@ -43,6 +45,16 @@ const Player = ({
 
       {/* Contrôles de lecture */}
       <div className="player-controls">
+        <button
+          className={`player-btn ${autoPlay ? 'player-btn-autoplay-active' : ''}`}
+          onClick={onToggleAutoPlay}
+          title={autoPlay ? 'Auto-play actif' : 'Auto-play inactif'}
+          style={{ fontSize: '0.6rem', minWidth: '36px' }}
+        >
+          <Play size={14} fill={autoPlay ? 'var(--accent-gold)' : 'none'} color={autoPlay ? 'var(--accent-gold)' : 'currentColor'} />
+          <span className="player-btn-label" style={{ color: autoPlay ? 'var(--accent-gold)' : undefined }}>Auto</span>
+        </button>
+
         <button
           className="player-btn"
           onClick={onSkipBack}
