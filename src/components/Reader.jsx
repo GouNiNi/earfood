@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { ArrowLeft, Bookmark, Highlighter, BookOpen, MessageCircle, Settings, List } from 'lucide-react'
+import { ArrowLeft, Bookmark, Highlighter, BookOpen, Sparkles, Settings, List } from 'lucide-react'
 import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings } from '../stores'
 import { TTSEngine } from '../utils/tts'
 import Player from './Player'
@@ -547,8 +547,8 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
           className={`reader-action-btn ${activePanel === 'chat' ? 'active' : ''}`}
           onClick={() => togglePanel('chat')}
         >
-          <MessageCircle size={16} />
-          <span>Chat</span>
+          <Sparkles size={16} />
+          <span>Chat IA</span>
         </button>
       </div>
 
