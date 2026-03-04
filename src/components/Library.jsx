@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { Plus, Book, Trash2, Headphones, Play, Clock, Settings } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Plus, Book, Trash2, Headphones, Play, Clock, Settings, X } from 'lucide-react'
 import { getAllDocuments, deleteDocument as deleteDoc, getProgress } from '../stores'
 import { formatDuration, formatRelativeTime } from '../utils/formatTime'
 import ImportModal from './ImportModal'
@@ -9,6 +9,8 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
   const [progressMap, setProgressMap] = useState({})
   const [isImportModalOpen, setIsImportModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
+  const [coverPreview, setCoverPreview] = useState(null) // { coverUrl, title, summary }
+  const touchStartRef = useRef(null)
 
   useEffect(() => {
     loadDocuments()
@@ -53,6 +55,32 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
 
   const getLastRead = (docId) => {
     return progressMap[docId]?.lastReadAt
+  }
+
+  const getSnippet = (doc) => {
+    if (!doc.content) return ''
+    return doc.content.replace(/\s+/g, ' ').trim().split(/\s+/).slice(0, 100).join(' ') + '…'
+  }
+
+  const handleCoverClick = (doc, e) => {
+    e.stopPropagation()
+    setCoverPreview({ coverUrl: doc.coverUrl, title: doc.title, summary: null })
+  }
+
+  const handleCoverTouchStart = (e) => {
+    touchStartRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }
+  }
+
+  const handleCoverTouchEnd = (doc, e) => {
+    if (!touchStartRef.current) return
+    const dx = e.changedTouches[0].clientX - touchStartRef.current.x
+    const dy = e.changedTouches[0].clientY - touchStartRef.current.y
+    touchStartRef.current = null
+    // Horizontal swipe detection (>50px, more horizontal than vertical)
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) {
+      e.stopPropagation()
+      setCoverPreview({ coverUrl: doc.coverUrl, title: doc.title, summary: getSnippet(doc) })
+    }
   }
 
   return (
@@ -109,6 +137,9 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
                       src={doc.coverUrl}
                       alt=""
                       className="doc-card-cover"
+                      onClick={(e) => handleCoverClick(doc, e)}
+                      onTouchStart={handleCoverTouchStart}
+                      onTouchEnd={(e) => handleCoverTouchEnd(doc, e)}
                     />
                   )}
                   <div style={{ flex: 1, minWidth: 0, padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -178,6 +209,50 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
           onClose={() => setIsImportModalOpen(false)}
           onImported={loadDocuments}
         />
+      )}
+
+      {coverPreview && (
+        <div className="modal-overlay" onClick={() => setCoverPreview(null)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            position: 'relative',
+            maxWidth: coverPreview.summary ? '500px' : '320px',
+            width: '90%',
+            background: 'var(--bg-paper)',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.2)',
+          }}>
+            <button
+              onClick={() => setCoverPreview(null)}
+              style={{
+                position: 'absolute', top: '8px', right: '8px', zIndex: 1,
+                padding: '4px', border: 'none', borderRadius: '50%',
+                background: 'rgba(0,0,0,0.4)', color: 'white', cursor: 'pointer',
+              }}
+            >
+              <X size={16} />
+            </button>
+            {coverPreview.summary ? (
+              <div style={{ padding: '1.5rem' }}>
+                <h3 className="serif" style={{ margin: '0 0 0.75rem', color: 'var(--text-main)' }}>
+                  {coverPreview.title}
+                </h3>
+                <p style={{
+                  fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text-main)',
+                  margin: 0,
+                }}>
+                  {coverPreview.summary}
+                </p>
+              </div>
+            ) : (
+              <img
+                src={coverPreview.coverUrl}
+                alt={coverPreview.title}
+                style={{ width: '100%', display: 'block' }}
+              />
+            )}
+          </div>
+        </div>
       )}
 
       <footer style={{
