@@ -522,6 +522,20 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
         <button className="reader-back-btn" onClick={() => { if (ttsRef.current) ttsRef.current.stop(); handleSaveProgress(); onBack() }}>
           <ArrowLeft size={20} />
         </button>
+        {doc.coverUrl && (
+          <img
+            src={doc.coverUrl}
+            alt=""
+            style={{
+              width: '28px',
+              height: '40px',
+              objectFit: 'cover',
+              borderRadius: '2px',
+              flexShrink: 0,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+            }}
+          />
+        )}
         <h2 className="reader-title serif">{doc.title}</h2>
         <button className="reader-back-btn" onClick={onOpenSettings} title="Réglages">
           <Settings size={20} />

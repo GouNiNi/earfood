@@ -103,14 +103,32 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
                   className="doc-card"
                   onClick={() => onOpenDocument(doc.id)}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <h3 className="doc-title serif">{doc.title}</h3>
-                    <button
-                      onClick={(e) => handleDelete(doc.id, e)}
-                      style={{ padding: '4px', border: 'none', background: 'transparent', flexShrink: 0 }}
-                    >
-                      <Trash2 size={16} color="var(--text-muted)" />
-                    </button>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                    {doc.coverUrl && (
+                      <img
+                        src={doc.coverUrl}
+                        alt=""
+                        style={{
+                          width: '48px',
+                          height: '68px',
+                          objectFit: 'cover',
+                          borderRadius: '3px',
+                          flexShrink: 0,
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+                        }}
+                      />
+                    )}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                        <h3 className="doc-title serif">{doc.title}</h3>
+                        <button
+                          onClick={(e) => handleDelete(doc.id, e)}
+                          style={{ padding: '4px', border: 'none', background: 'transparent', flexShrink: 0 }}
+                        >
+                          <Trash2 size={16} color="var(--text-muted)" />
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div className="doc-meta">
                     <span>{doc.author}</span>

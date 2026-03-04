@@ -25,6 +25,24 @@ const ImportModal = ({ onClose, onImported }) => {
         throw new Error('Le document semble vide ou illisible.')
       }
 
+      setProgress('Recherche de la couverture...')
+
+      // Try to fetch cover from Open Library
+      let coverUrl = null
+      try {
+        const query = encodeURIComponent(title)
+        const resp = await fetch(`https://openlibrary.org/search.json?q=${query}&limit=3`)
+        if (resp.ok) {
+          const data = await resp.json()
+          const doc = data.docs?.find(d => d.cover_i)
+          if (doc?.cover_i) {
+            coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+          }
+        }
+      } catch (e) {
+        // Cover search failed, continue without
+      }
+
       setProgress('Sauvegarde du document...')
 
       const id = crypto.randomUUID()
@@ -37,6 +55,7 @@ const ImportModal = ({ onClose, onImported }) => {
         content: text,
         htmlContent: htmlContent || undefined,
         chapters: chapters || undefined,
+        coverUrl: coverUrl || undefined,
         duration: estimateDuration(text),
         createdAt: Date.now(),
         updatedAt: Date.now(),
