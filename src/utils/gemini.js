@@ -10,7 +10,7 @@ export function initGemini(apiKey) {
   if (!apiKey) return false
   try {
     genAI = new GoogleGenerativeAI(apiKey)
-    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-lite' })
+    model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
     return true
   } catch (e) {
     console.error('Erreur initialisation Gemini:', e)
