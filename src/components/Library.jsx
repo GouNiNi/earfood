@@ -130,7 +130,6 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
                   key={doc.id}
                   className="doc-card"
                   onClick={() => onOpenDocument(doc.id)}
-                  style={{ flexDirection: 'row', padding: 0, overflow: 'hidden' }}
                 >
                   {doc.coverUrl && (
                     <img
@@ -142,9 +141,9 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
                       onTouchEnd={(e) => handleCoverTouchEnd(doc, e)}
                     />
                   )}
-                  <div style={{ flex: 1, minWidth: 0, padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  <div style={{ flex: 1, minWidth: 0, padding: '0.75rem 1rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <h3 className="doc-title serif">{doc.title}</h3>
+                      <h3 className="doc-title serif" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.title}</h3>
                       <button
                         onClick={(e) => handleDelete(doc.id, e)}
                         style={{ padding: '4px', border: 'none', background: 'transparent', flexShrink: 0 }}

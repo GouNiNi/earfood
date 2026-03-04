@@ -36,14 +36,15 @@
 .doc-card {
   background: white;
   border: 1px solid var(--border-color);
-  padding: 1.5rem;
+  padding: 0;
   border-radius: 4px;
   position: relative;
   transition: transform 0.2s ease, border-color 0.2s ease;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  flex-direction: row;
+  height: 140px;
+  overflow: hidden;
 }
 
 .doc-card:hover {
@@ -52,8 +53,8 @@
 }
 
 .doc-card-cover {
-  width: 80px;
-  height: 120px;
+  width: 93px;
+  height: 100%;
   object-fit: cover;
   flex-shrink: 0;
   border-right: 1px solid var(--border-color);
