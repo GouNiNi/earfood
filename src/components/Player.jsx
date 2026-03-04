@@ -46,16 +46,6 @@ const Player = ({
       {/* Contrôles de lecture */}
       <div className="player-controls">
         <button
-          className={`player-btn ${autoPlay ? 'player-btn-autoplay-active' : ''}`}
-          onClick={onToggleAutoPlay}
-          title={autoPlay ? 'Auto-play actif' : 'Auto-play inactif'}
-          style={{ fontSize: '0.6rem', minWidth: '36px' }}
-        >
-          <Play size={14} fill={autoPlay ? 'var(--accent-gold)' : 'none'} color={autoPlay ? 'var(--accent-gold)' : 'currentColor'} />
-          <span className="player-btn-label" style={{ color: autoPlay ? 'var(--accent-gold)' : undefined }}>Auto</span>
-        </button>
-
-        <button
           className="player-btn"
           onClick={onSkipBack}
           title="Reculer 15 secondes"
@@ -81,8 +71,17 @@ const Player = ({
         </button>
       </div>
 
-      {/* Vitesse + indicateur mode */}
+      {/* Vitesse + auto-play + indicateur mode */}
       <div className="player-speed">
+        <button
+          className={`player-btn ${autoPlay ? 'player-btn-autoplay-active' : ''}`}
+          onClick={onToggleAutoPlay}
+          title={autoPlay ? 'Auto-play actif' : 'Auto-play inactif'}
+          style={{ fontSize: '0.6rem', minWidth: '36px', padding: '2px 6px', flexDirection: 'row', gap: '4px' }}
+        >
+          <Play size={12} fill={autoPlay ? 'var(--accent-gold)' : 'none'} color={autoPlay ? 'var(--accent-gold)' : 'currentColor'} />
+          <span style={{ fontSize: '0.7rem', color: autoPlay ? 'var(--accent-gold)' : 'var(--text-muted)' }}>Auto</span>
+        </button>
         <span className="player-speed-label">0.5x</span>
         <input
           type="range"
