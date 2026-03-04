@@ -153,6 +153,12 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
                     </div>
                     <div className="doc-meta">
                       <span>{doc.author}</span>
+                      {doc.citation?.year && (
+                        <>
+                          <span style={{ opacity: 0.4 }}>|</span>
+                          <span>{doc.citation.year}</span>
+                        </>
+                      )}
                       <span style={{ opacity: 0.4 }}>|</span>
                       <span>{formatDuration(doc.duration)}</span>
                       <span style={{ opacity: 0.4 }}>|</span>

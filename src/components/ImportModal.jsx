@@ -52,22 +52,42 @@ const ImportModal = ({ onClose, onImported, onOpenSettings }) => {
         }
       }
 
-      setProgress('Recherche de la couverture...')
+      setProgress('Recherche des métadonnées et couverture...')
 
-      // Try to fetch cover from Open Library
+      // Fetch cover + metadata from Open Library (for Chicago-style citations)
       let coverUrl = null
+      let citation = null
+      let enrichedAuthor = author
       try {
-        const query = encodeURIComponent(title)
-        const resp = await fetch(`https://openlibrary.org/search.json?q=${query}&limit=3`)
+        const query = encodeURIComponent(title + (author !== 'Auteur inconnu' ? ' ' + author : ''))
+        const resp = await fetch(`https://openlibrary.org/search.json?q=${query}&limit=3&fields=key,title,author_name,first_publish_year,publisher,publish_place,isbn,edition_count,cover_i,number_of_pages_median,subject,language`)
         if (resp.ok) {
           const data = await resp.json()
-          const doc = data.docs?.find(d => d.cover_i)
-          if (doc?.cover_i) {
-            coverUrl = `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+          const match = data.docs?.[0]
+          if (match) {
+            if (match.cover_i) {
+              coverUrl = `https://covers.openlibrary.org/b/id/${match.cover_i}-M.jpg`
+            }
+            // Enrich author from API if local extraction gave nothing
+            if (match.author_name?.length > 0 && author === 'Auteur inconnu') {
+              enrichedAuthor = match.author_name.join(', ')
+            }
+            // Build Chicago-style citation metadata
+            citation = {
+              authors: match.author_name || (author !== 'Auteur inconnu' ? [author] : []),
+              title: match.title || title,
+              publisher: match.publisher?.[0] || null,
+              placeOfPublication: match.publish_place?.[0] || null,
+              year: match.first_publish_year || null,
+              isbn: match.isbn?.[0] || null,
+              pages: match.number_of_pages_median || null,
+              subjects: match.subject?.slice(0, 5) || [],
+              language: match.language?.[0] || null,
+            }
           }
         }
       } catch (e) {
-        // Cover search failed, continue without
+        // Metadata search failed, continue without
       }
 
       setProgress('Sauvegarde du document...')
@@ -76,13 +96,14 @@ const ImportModal = ({ onClose, onImported, onOpenSettings }) => {
       const newDoc = {
         id,
         title,
-        author,
+        author: enrichedAuthor,
         filename: file.name,
         type: file.name.split('.').pop().toLowerCase(),
         content: text,
         htmlContent: htmlContent || undefined,
         chapters: finalChapters || undefined,
         coverUrl: coverUrl || undefined,
+        citation: citation || undefined,
         duration: estimateDuration(text),
         createdAt: Date.now(),
         updatedAt: Date.now(),
