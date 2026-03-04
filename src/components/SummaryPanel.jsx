@@ -65,6 +65,12 @@ const SummaryPanel = ({ documentId, documentContent, chapters: chaptersProp, onC
 
     try {
       const segment = documentContent.slice(chapter.start, chapter.end)
+      console.log(`[Summary] Chapter "${chapter.title}" start=${chapter.start} end=${chapter.end} length=${segment.length}`)
+      if (!segment || segment.trim().length < 20) {
+        setError(`Le chapitre "${chapter.title}" ne contient pas assez de texte (${segment.length} caractères).`)
+        setLoadingChapter(null)
+        return
+      }
       const summaryText = await generateSummary(segment, chapter.title)
 
       const summary = {

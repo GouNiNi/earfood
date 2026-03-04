@@ -124,14 +124,15 @@ export function detectChapters(text, nativeChapters) {
 export async function detectChaptersWithAI(text) {
   if (!model || !text) return null
 
-  // On envoie les 20000 premiers caractères pour la détection
-  const truncated = text.slice(0, 20000)
+  // Send enough text for Gemini to see the full table of contents / structure
+  // Many books have the TOC or all chapter headings within the first portion
+  const truncated = text.slice(0, 50000)
 
   const prompt = `Analyse ce texte et identifie les chapitres, parties ou sections principales.
-Pour chaque chapitre trouvé, retourne son titre exact tel qu'il apparaît dans le texte.
+Pour chaque chapitre trouvé, retourne son titre EXACT tel qu'il apparaît dans le texte (caractère pour caractère, y compris la ponctuation et les accents).
 
 IMPORTANT : Retourne UNIQUEMENT un JSON valide, sans texte autour, au format :
-[{"title": "Titre du chapitre"}]
+[{"title": "Titre exact du chapitre"}]
 
 Si tu ne trouves aucun chapitre clair, retourne : []
 
@@ -149,11 +150,21 @@ ${truncated}
     const parsed = JSON.parse(jsonMatch[0])
     if (!Array.isArray(parsed) || parsed.length === 0) return null
 
-    // Retrouver les positions dans le texte complet
+    // Retrouver les positions dans le texte COMPLET (pas le tronqué)
     const chapters = []
     for (const ch of parsed) {
       if (!ch.title) continue
-      const idx = text.indexOf(ch.title)
+      // Try exact match first
+      let idx = text.indexOf(ch.title)
+      // If not found, try case-insensitive search
+      if (idx < 0) {
+        const lower = text.toLowerCase()
+        idx = lower.indexOf(ch.title.toLowerCase())
+      }
+      // If still not found, try partial match (first 30 chars of title)
+      if (idx < 0 && ch.title.length > 30) {
+        idx = text.indexOf(ch.title.slice(0, 30))
+      }
       if (idx >= 0) {
         chapters.push({ title: ch.title, start: idx })
       }
@@ -182,19 +193,25 @@ ${truncated}
 export async function generateSummary(textSegment, chapterTitle) {
   if (!model) throw new Error('Gemini non configuré. Ajoutez votre clé API dans les réglages.')
 
-  // Limiter le texte envoyé (Gemini Flash supporte beaucoup mais on reste raisonnable)
-  const truncated = textSegment.slice(0, 8000)
+  if (!textSegment || textSegment.trim().length < 20) {
+    throw new Error(`Le chapitre "${chapterTitle || '?'}" semble vide ou trop court pour être résumé.`)
+  }
 
-  const prompt = `Tu es un assistant de lecture intelligent et cultivé. Produis un résumé enrichi du passage suivant en français, lisible à voix haute en environ 60 secondes.
+  // Gemini 2.5 Flash supporte de larges contextes, on envoie jusqu'à 30000 chars
+  const truncated = textSegment.slice(0, 30000)
+
+  const prompt = `Tu es un assistant de lecture intelligent et cultivé. Résume le texte ci-dessous en français, lisible à voix haute en environ 60 secondes.
+
+IMPORTANT : Le texte à résumer est fourni intégralement ci-dessous. Base-toi UNIQUEMENT sur ce texte. Ne dis jamais que tu n'as pas le contenu.
 
 Structure attendue :
-1. Un paragraphe de synthèse (5-8 phrases) qui capture l'essentiel du passage
+1. Un paragraphe de synthèse (5-8 phrases) qui capture l'essentiel
 2. Une liste à puces des idées principales (3-5 points clés)
-3. 1-2 citations ou termes clés remarquables du texte (entre guillemets)
+3. 1-2 citations ou termes clés remarquables (entre guillemets)
 
 ${chapterTitle ? `Titre du chapitre : "${chapterTitle}"` : ''}
 
-Texte à résumer :
+TEXTE DU CHAPITRE (${truncated.length} caractères) :
 """
 ${truncated}
 """
@@ -217,8 +234,8 @@ Résumé enrichi en français :`
 export async function askAboutDocument(question, documentContent, chatHistory = []) {
   if (!model) throw new Error('Gemini non configuré. Ajoutez votre clé API dans les réglages.')
 
-  // Limiter le contexte
-  const context = documentContent.slice(0, 15000)
+  // Limiter le contexte du document (Gemini 2.5 Flash gère de larges contextes)
+  const context = documentContent.slice(0, 50000)
 
   const messages = [
     {

@@ -250,7 +250,10 @@ const ChatPanel = ({ documentId, documentContent, chapters: chaptersProp, onConf
   }
 
   const handleSelectChapter = (chapter) => {
-    setInput(`Résume le chapitre "${chapter.title}"`)
+    // Inject the actual chapter text into the prompt so Gemini always has it
+    const chapterText = documentContent.slice(chapter.start, chapter.end)
+    const truncatedChapter = chapterText.slice(0, 30000)
+    setInput(`Résume le chapitre "${chapter.title}". Voici le contenu du chapitre :\n\n${truncatedChapter}`)
     setChaptersOpen(false)
   }
 
