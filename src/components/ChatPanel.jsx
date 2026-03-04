@@ -109,6 +109,7 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
   const messagesEndRef = useRef(null)
   const recognitionRef = useRef(null)
   const chatTtsRef = useRef(null)
+  const [speakingIndex, setSpeakingIndex] = useState(null)
 
   // Summaries sidebar state
   const [summaries, setSummaries] = useState({})
@@ -208,10 +209,18 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
     }
   }
 
-  const handleSpeak = (text) => {
+  const handleSpeak = (text, index) => {
     if (!chatTtsRef.current) return
+    // Toggle: if already speaking this message, stop
+    if (speakingIndex === index) {
+      chatTtsRef.current.stop()
+      setSpeakingIndex(null)
+      return
+    }
     chatTtsRef.current.stop()
     chatTtsRef.current.loadText(text)
+    chatTtsRef.current.onEnd = () => setSpeakingIndex(null)
+    setSpeakingIndex(index)
     chatTtsRef.current.play()
   }
 
@@ -349,9 +358,9 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
                     {msg.role === 'assistant' ? renderMarkdown(msg.text) : msg.text}
                     {msg.role === 'assistant' && (
                       <button
-                        className="chat-speak-btn"
-                        onClick={() => handleSpeak(msg.text)}
-                        title="Écouter"
+                        className={`chat-speak-btn ${speakingIndex === i ? 'active' : ''}`}
+                        onClick={() => handleSpeak(msg.text, i)}
+                        title={speakingIndex === i ? 'Arrêter' : 'Écouter'}
                       >
                         <Volume2 size={12} />
                       </button>
