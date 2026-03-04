@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, memo } from 'react'
 import { MessageCircle, Send, Mic, MicOff, Volume2, Trash2, Loader, BookOpen } from 'lucide-react'
-import { getChatHistory, saveChatHistory, clearChatHistory, getSummaries, getSettings } from '../stores'
+import { getChatHistory, saveChatHistory, clearChatHistory, getSettings } from '../stores'
 import { askAboutDocument, isGeminiReady, detectChapters } from '../utils/gemini'
 import { TTSEngine } from '../utils/tts'
 
@@ -111,10 +111,9 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
   const chatTtsRef = useRef(null)
   const [speakingIndex, setSpeakingIndex] = useState(null)
 
-  // Summaries sidebar state
-  const [summaries, setSummaries] = useState({})
+  // Chapters dropdown state
   const [chapters, setChapters] = useState([])
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [chaptersOpen, setChaptersOpen] = useState(false)
 
   // Initialize TTS engine for chat voice
   useEffect(() => {
@@ -146,23 +145,15 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
 
   useEffect(() => {
     loadHistory()
-    // Load chapters and summaries for sidebar
+    // Load chapters for dropdown
     if (documentContent) {
       const detected = detectChapters(documentContent)
       setChapters(detected)
-      loadSummaries()
     }
     return () => {
       if (recognitionRef.current) recognitionRef.current.stop()
     }
   }, [documentId])
-
-  const loadSummaries = async () => {
-    const cached = await getSummaries(documentId)
-    const map = {}
-    cached.forEach(s => { map[s.chapterStart] = s })
-    setSummaries(map)
-  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -263,14 +254,12 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
     setMessages([])
   }
 
-  const handleInsertSummaryContext = (chapter, summary) => {
-    const prefix = `À propos de "${chapter.title}" : ${summary.summary.slice(0, 200)}...\n\nMa question : `
-    setInput(prefix)
-    setSidebarOpen(false)
+  const handleSelectChapter = (chapter) => {
+    setInput(`Résume le chapitre "${chapter.title}"`)
+    setChaptersOpen(false)
   }
 
   const geminiReady = isGeminiReady()
-  const hasSummaries = Object.keys(summaries).length > 0
 
   return (
     <div className="panel chat-panel">
@@ -280,11 +269,11 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
           Discussion
         </h3>
         <div style={{ display: 'flex', gap: '4px' }}>
-          {hasSummaries && (
+          {chapters.length > 0 && (
             <button
-              className={`panel-action-btn ${sidebarOpen ? 'active' : ''}`}
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              title="Résumés des chapitres"
+              className={`panel-action-btn ${chaptersOpen ? 'active' : ''}`}
+              onClick={() => setChaptersOpen(!chaptersOpen)}
+              title="Résumer un chapitre"
             >
               <BookOpen size={14} />
             </button>
@@ -311,38 +300,23 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
           </button>
         </div>
       ) : (
-        <div className="chat-layout">
-          {/* Sidebar résumés */}
-          {hasSummaries && (
-            <div className={`chat-sidebar ${sidebarOpen ? 'chat-sidebar-open' : ''}`}>
-              <div style={{ padding: '0.5rem', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', borderBottom: '1px solid var(--border-color)' }}>
-                Résumés
-              </div>
-              <div className="chat-sidebar-list">
-                {chapters.map((ch, i) => {
-                  const summary = summaries[ch.start]
-                  if (!summary) return null
-                  return (
-                    <div
-                      key={i}
-                      className="chat-sidebar-item"
-                      onClick={() => handleInsertSummaryContext(ch, summary)}
-                      title="Cliquez pour utiliser comme contexte"
-                    >
-                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--accent-gold)', marginBottom: '2px' }}>
-                        {ch.title}
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
-                        {summary.summary.length > 120 ? summary.summary.slice(0, 120) + '...' : summary.summary}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
+        <>
+          {/* Chapters dropdown */}
+          {chaptersOpen && chapters.length > 0 && (
+            <div className="chat-chapters-dropdown">
+              {chapters.map((ch, i) => (
+                <button
+                  key={i}
+                  className="chat-chapter-item"
+                  onClick={() => handleSelectChapter(ch)}
+                >
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', minWidth: '1.5rem' }}>{i + 1}</span>
+                  <span>{ch.title}</span>
+                </button>
+              ))}
             </div>
           )}
 
-          {/* Main chat area */}
           <div className="chat-main">
             {/* Messages */}
             <div className="chat-messages">
@@ -412,7 +386,7 @@ const ChatPanel = ({ documentId, documentContent, onConfigureApi }) => {
               </button>
             </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   )

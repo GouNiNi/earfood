@@ -1055,6 +1055,43 @@
   min-width: 0;
 }
 
+.chat-chapters-dropdown {
+  max-height: 180px;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.chat-chapter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  font-size: 0.8rem;
+  color: var(--text-main);
+  transition: background-color 0.15s;
+}
+
+.chat-chapter-item:last-child {
+  border-bottom: none;
+}
+
+.chat-chapter-item:hover {
+  background: rgba(197, 160, 89, 0.08);
+  color: var(--accent-gold);
+  border: none;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.chat-chapter-item:last-child:hover {
+  border-bottom: none;
+}
+
 /* === RICH TEXT === */
 .reader-rich-text h1,
 .reader-rich-text h2,
