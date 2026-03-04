@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { ArrowLeft, Bookmark, Highlighter, BookOpen, Sparkles, Settings, List } from 'lucide-react'
 import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings, saveSettings } from '../stores'
 import { TTSEngine } from '../utils/tts'
-import { detectChapters } from '../utils/gemini'
 import Player from './Player'
 import BookmarkPanel from './BookmarkPanel'
 import HighlightPanel from './HighlightPanel'
@@ -313,10 +312,10 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     setActivePanel(newPanel)
   }
 
-  // Detect chapters (native or heuristic fallback)
+  // Use chapters stored with the document at import time
   const chapters = useMemo(() => {
-    if (!doc) return []
-    return detectChapters(doc.content, doc.chapters)
+    if (!doc?.chapters || doc.chapters.length === 0) return []
+    return doc.chapters
   }, [doc])
 
   // Memoize sentences from TTS
@@ -700,6 +699,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
         <SummaryPanel
           documentId={documentId}
           documentContent={doc.content}
+          chapters={chapters}
           onConfigureApi={onOpenSettings}
         />
       )}

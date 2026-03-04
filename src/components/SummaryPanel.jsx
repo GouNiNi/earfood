@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef, memo } from 'react'
 import { BookOpen, Loader, Play, RefreshCw, AlertCircle } from 'lucide-react'
 import { getSummaries, saveSummary, getSettings } from '../stores'
-import { detectChapters, generateSummary, isGeminiReady } from '../utils/gemini'
+import { generateSummary, isGeminiReady } from '../utils/gemini'
 import { TTSEngine } from '../utils/tts'
 
-const SummaryPanel = ({ documentId, documentContent, onConfigureApi }) => {
-  const [chapters, setChapters] = useState([])
+const SummaryPanel = ({ documentId, documentContent, chapters: chaptersProp, onConfigureApi }) => {
   const [summaries, setSummaries] = useState({})
   const [loadingChapter, setLoadingChapter] = useState(null)
   const [error, setError] = useState(null)
@@ -40,10 +39,10 @@ const SummaryPanel = ({ documentId, documentContent, onConfigureApi }) => {
     }
   }, [])
 
+  const chapters = chaptersProp || []
+
   useEffect(() => {
     if (documentContent) {
-      const detected = detectChapters(documentContent)
-      setChapters(detected)
       loadCachedSummaries()
     }
   }, [documentContent])

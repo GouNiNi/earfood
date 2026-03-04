@@ -118,6 +118,65 @@ export function detectChapters(text, nativeChapters) {
 }
 
 /**
+ * Détecter les chapitres via Gemini AI
+ * Retourne un tableau [{title, start, end}] ou null si échec
+ */
+export async function detectChaptersWithAI(text) {
+  if (!model || !text) return null
+
+  // On envoie les 20000 premiers caractères pour la détection
+  const truncated = text.slice(0, 20000)
+
+  const prompt = `Analyse ce texte et identifie les chapitres, parties ou sections principales.
+Pour chaque chapitre trouvé, retourne son titre exact tel qu'il apparaît dans le texte.
+
+IMPORTANT : Retourne UNIQUEMENT un JSON valide, sans texte autour, au format :
+[{"title": "Titre du chapitre"}]
+
+Si tu ne trouves aucun chapitre clair, retourne : []
+
+Texte :
+"""
+${truncated}
+"""`
+
+  try {
+    const result = await model.generateContent(prompt)
+    const raw = result.response.text().trim()
+    // Extraire le JSON du résultat
+    const jsonMatch = raw.match(/\[[\s\S]*\]/)
+    if (!jsonMatch) return null
+    const parsed = JSON.parse(jsonMatch[0])
+    if (!Array.isArray(parsed) || parsed.length === 0) return null
+
+    // Retrouver les positions dans le texte complet
+    const chapters = []
+    for (const ch of parsed) {
+      if (!ch.title) continue
+      const idx = text.indexOf(ch.title)
+      if (idx >= 0) {
+        chapters.push({ title: ch.title, start: idx })
+      }
+    }
+
+    if (chapters.length === 0) return null
+
+    // Trier et ajouter les fins
+    chapters.sort((a, b) => a.start - b.start)
+    for (let i = 0; i < chapters.length; i++) {
+      chapters[i].end = i < chapters.length - 1
+        ? chapters[i + 1].start
+        : text.length
+    }
+
+    return chapters
+  } catch (e) {
+    console.warn('Détection chapitres IA échouée:', e.message)
+    return null
+  }
+}
+
+/**
  * Générer un résumé pour un segment de texte via Gemini
  */
 export async function generateSummary(textSegment, chapterTitle) {

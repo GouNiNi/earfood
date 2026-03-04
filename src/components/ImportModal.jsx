@@ -2,7 +2,8 @@ import { useRef, useState } from 'react'
 import { Plus, FileText, Loader } from 'lucide-react'
 import { extractText } from '../utils/extractText'
 import { estimateDuration } from '../utils/formatTime'
-import { saveDocument } from '../stores'
+import { saveDocument, getSettings } from '../stores'
+import { initGemini, isGeminiReady, detectChaptersWithAI, detectChapters } from '../utils/gemini'
 
 const ImportModal = ({ onClose, onImported }) => {
   const fileInputRef = useRef(null)
@@ -23,6 +24,27 @@ const ImportModal = ({ onClose, onImported }) => {
 
       if (!text || text.length < 10) {
         throw new Error('Le document semble vide ou illisible.')
+      }
+
+      // Détecter les chapitres si pas de chapitres natifs
+      let finalChapters = chapters
+      if (!finalChapters || finalChapters.length === 0) {
+        setProgress('Détection des chapitres...')
+        // Essayer avec Gemini d'abord
+        if (!isGeminiReady()) {
+          const settings = await getSettings()
+          if (settings.geminiApiKey) initGemini(settings.geminiApiKey)
+        }
+        if (isGeminiReady()) {
+          const aiChapters = await detectChaptersWithAI(text)
+          if (aiChapters && aiChapters.length > 0) {
+            finalChapters = aiChapters
+          }
+        }
+        // Fallback heuristique local
+        if (!finalChapters || finalChapters.length === 0) {
+          finalChapters = detectChapters(text, null)
+        }
       }
 
       setProgress('Recherche de la couverture...')
@@ -54,7 +76,7 @@ const ImportModal = ({ onClose, onImported }) => {
         type: file.name.split('.').pop().toLowerCase(),
         content: text,
         htmlContent: htmlContent || undefined,
-        chapters: chapters || undefined,
+        chapters: finalChapters || undefined,
         coverUrl: coverUrl || undefined,
         duration: estimateDuration(text),
         createdAt: Date.now(),
