@@ -51,6 +51,14 @@
   border-color: var(--accent-gold);
 }
 
+.doc-card-cover {
+  width: 90px;
+  object-fit: cover;
+  align-self: stretch;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border-color);
+}
+
 .doc-title {
   margin: 0;
   font-size: 1.2rem;

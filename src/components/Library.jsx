@@ -102,77 +102,69 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
                   key={doc.id}
                   className="doc-card"
                   onClick={() => onOpenDocument(doc.id)}
+                  style={{ flexDirection: 'row', padding: 0, overflow: 'hidden' }}
                 >
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-                    {doc.coverUrl && (
-                      <img
-                        src={doc.coverUrl}
-                        alt=""
-                        style={{
-                          width: '48px',
-                          height: '68px',
-                          objectFit: 'cover',
-                          borderRadius: '3px',
-                          flexShrink: 0,
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-                        }}
-                      />
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <h3 className="doc-title serif">{doc.title}</h3>
-                        <button
-                          onClick={(e) => handleDelete(doc.id, e)}
-                          style={{ padding: '4px', border: 'none', background: 'transparent', flexShrink: 0 }}
-                        >
-                          <Trash2 size={16} color="var(--text-muted)" />
-                        </button>
+                  {doc.coverUrl && (
+                    <img
+                      src={doc.coverUrl}
+                      alt=""
+                      className="doc-card-cover"
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0, padding: '1.2rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <h3 className="doc-title serif">{doc.title}</h3>
+                      <button
+                        onClick={(e) => handleDelete(doc.id, e)}
+                        style={{ padding: '4px', border: 'none', background: 'transparent', flexShrink: 0 }}
+                      >
+                        <Trash2 size={16} color="var(--text-muted)" />
+                      </button>
+                    </div>
+                    <div className="doc-meta">
+                      <span>{doc.author}</span>
+                      <span style={{ opacity: 0.4 }}>|</span>
+                      <span>{formatDuration(doc.duration)}</span>
+                      <span style={{ opacity: 0.4 }}>|</span>
+                      <span style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>{doc.type}</span>
+                    </div>
+
+                    <div className="progress-container">
+                      <div className="progress-bar">
+                        <div className="progress-fill" style={{ transform: `scaleX(${pct / 100})` }}></div>
                       </div>
+                      <span className="progress-text">{pct}% écouté</span>
                     </div>
-                  </div>
-                  <div className="doc-meta">
-                    <span>{doc.author}</span>
-                    <span style={{ opacity: 0.4 }}>|</span>
-                    <span>{formatDuration(doc.duration)}</span>
-                    <span style={{ opacity: 0.4 }}>|</span>
-                    <span style={{ textTransform: 'uppercase', fontSize: '0.75rem' }}>{doc.type}</span>
-                  </div>
 
-                  <div className="progress-container">
-                    <div className="progress-bar">
-                      <div className="progress-fill" style={{ transform: `scaleX(${pct / 100})` }}></div>
-                    </div>
-                    <span className="progress-text">{pct}% écouté</span>
-                  </div>
-
-                  <div style={{
-                    marginTop: '0.25rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    fontSize: '0.8rem',
-                  }}>
-                    <span style={{
+                    <div style={{
+                      marginTop: '0.25rem',
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      color: 'var(--accent-gold)'
+                      justifyContent: 'space-between',
+                      fontSize: '0.8rem',
                     }}>
-                      <Play size={12} fill="var(--accent-gold)" />
-                      <span className="serif">{pct > 0 ? "Continuer l'écoute" : "Commencer l'écoute"}</span>
-                    </span>
-                    {lastRead && (
                       <span style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        color: 'var(--text-muted)',
-                        fontSize: '0.75rem'
+                        gap: '6px',
+                        color: 'var(--accent-gold)'
                       }}>
-                        <Clock size={11} />
-                        {formatRelativeTime(lastRead)}
+                        <Play size={12} fill="var(--accent-gold)" />
+                        <span className="serif">{pct > 0 ? "Continuer l'écoute" : "Commencer l'écoute"}</span>
                       </span>
-                    )}
+                      {lastRead && (
+                        <span style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.75rem'
+                        }}>
+                          <Clock size={11} />
+                          {formatRelativeTime(lastRead)}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
               )
