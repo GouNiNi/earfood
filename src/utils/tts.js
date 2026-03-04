@@ -217,7 +217,19 @@ export class TTSEngine {
 
   seekToCharPosition(charPos) {
     const wasPlaying = this.isPlaying
-    this.stop()
+    // Nettoyer tout buffer en cours (audio, synth, sherpa)
+    this.synth.cancel()
+    if (this._audioEl) {
+      this._audioEl.pause()
+      this._audioEl.src = ''
+      this._audioEl = null
+    }
+    if (this._sherpaStop) {
+      this._sherpaStop()
+      this._sherpaStop = null
+    }
+    this.isPlaying = false
+    this.isPaused = false
 
     let targetIndex = 0
     for (let i = 0; i < this.sentencePositions.length; i++) {
