@@ -1,10 +1,11 @@
-import { useState, memo } from 'react'
-import { Highlighter, Trash2, Palette, Search, Edit3, Check, X, Download, Copy } from 'lucide-react'
+import { useState, useEffect, memo } from 'react'
+import { Highlighter, Trash2, Search, Edit3, Check, X, Download, Copy } from 'lucide-react'
 import { saveHighlight, deleteHighlight as deleteHl } from '../stores'
 import { formatTime } from '../utils/formatTime'
 import Fuse from 'fuse.js'
 
 const HIGHLIGHT_COLORS = [
+  { name: 'Aucune', value: null },
   { name: 'Jaune', value: '#fef08a' },
   { name: 'Rose', value: '#fca5a5' },
   { name: 'Vert', value: '#a7f3d0' },
@@ -21,28 +22,29 @@ const HighlightPanel = ({
   onJumpToHighlight,
   activeColor,
   onColorChange,
-  isHighlightMode,
-  onToggleHighlightMode,
 }) => {
   const [searchQuery, setSearchQuery] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [editTitle, setEditTitle] = useState('')
   const [copied, setCopied] = useState(false)
 
-  const handleAddHighlight = async () => {
-    if (!selectedText || !selectionRange) return
-    const highlight = {
-      id: crypto.randomUUID(),
-      documentId,
-      startPos: selectionRange.start,
-      endPos: selectionRange.end,
-      text: selectedText,
-      title: '',
-      color: activeColor,
-      createdAt: Date.now(),
+  // Auto-apply highlight when a color is clicked and text is selected
+  const handleColorClick = async (colorValue) => {
+    onColorChange(colorValue)
+    if (selectedText && selectionRange && colorValue) {
+      const highlight = {
+        id: crypto.randomUUID(),
+        documentId,
+        startPos: selectionRange.start,
+        endPos: selectionRange.end,
+        text: selectedText,
+        title: '',
+        color: colorValue,
+        createdAt: Date.now(),
+      }
+      await saveHighlight(highlight)
+      onRefresh()
     }
-    await saveHighlight(highlight)
-    onRefresh()
   }
 
   const handleDelete = async (id) => {
@@ -126,34 +128,47 @@ const HighlightPanel = ({
             </span>
           )}
         </h3>
-        <button
-          className={`panel-action-btn ${isHighlightMode ? 'active' : ''}`}
-          onClick={onToggleHighlightMode}
-        >
-          <Palette size={16} />
-          {isHighlightMode ? 'Actif' : 'Surligner'}
-        </button>
+        <div className="highlight-colors">
+          {HIGHLIGHT_COLORS.map((c) => (
+            <button
+              key={c.name}
+              className={`highlight-color-btn ${activeColor === c.value ? 'selected' : ''}`}
+              style={{
+                background: c.value || 'transparent',
+                border: c.value ? '2px solid transparent' : '2px solid var(--border-color)',
+                position: 'relative',
+              }}
+              onClick={() => handleColorClick(c.value)}
+              title={c.name}
+            >
+              {!c.value && (
+                <span style={{
+                  position: 'absolute',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%) rotate(45deg)',
+                  width: '16px',
+                  height: '2px',
+                  background: 'var(--text-muted)',
+                }} />
+              )}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {isHighlightMode && (
-        <div className="highlight-toolbar">
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Couleur :</span>
-          <div className="highlight-colors">
-            {HIGHLIGHT_COLORS.map((c) => (
-              <button
-                key={c.value}
-                className={`highlight-color-btn ${activeColor === c.value ? 'selected' : ''}`}
-                style={{ background: c.value }}
-                onClick={() => onColorChange(c.value)}
-                title={c.name}
-              />
-            ))}
-          </div>
-          {selectedText && (
-            <button className="primary" onClick={handleAddHighlight} style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }}>
-              Surligner la sélection
-            </button>
-          )}
+      {selectedText && (
+        <div style={{
+          padding: '0.5rem 1rem',
+          borderBottom: '1px solid var(--border-color)',
+          fontSize: '0.8rem',
+          color: 'var(--text-muted)',
+          fontStyle: 'italic',
+        }}>
+          Sélection : « {selectedText.length > 60 ? selectedText.slice(0, 60) + '...' : selectedText} »
+          {activeColor ? (
+            <span style={{ color: 'var(--color-success)', marginLeft: '6px' }}>— cliquez une couleur pour surligner</span>
+          ) : null}
         </div>
       )}
 
@@ -183,6 +198,7 @@ const HighlightPanel = ({
         <div className="panel-empty">
           <Highlighter size={24} style={{ opacity: 0.3 }} />
           <p>Aucun surlignage</p>
+          <p style={{ fontSize: '0.8rem' }}>Sélectionnez du texte puis choisissez une couleur.</p>
         </div>
       ) : filteredHighlights.length === 0 ? (
         <div className="panel-empty">
@@ -202,7 +218,6 @@ const HighlightPanel = ({
                 style={{ background: hl.color }}
               />
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Titre / annotation */}
                 {editingId === hl.id ? (
                   <div className="highlight-edit-row" onClick={(e) => e.stopPropagation()}>
                     <input

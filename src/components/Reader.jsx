@@ -30,9 +30,8 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
   // Panel visibility
   const [activePanel, setActivePanel] = useState(null)
 
-  // Highlight mode
-  const [isHighlightMode, setIsHighlightMode] = useState(false)
-  const [activeColor, setActiveColor] = useState('#fef08a')
+  // Highlight color (null = no color selected)
+  const [activeColor, setActiveColor] = useState(null)
   const [selectedText, setSelectedText] = useState('')
   const [selectionRange, setSelectionRange] = useState(null)
 
@@ -188,9 +187,9 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     }
   }, [currentSentenceIndex])
 
-  // Handle text selection for highlights
+  // Handle text selection for highlights (active whenever highlight panel is open)
   const handleTextSelection = useCallback(() => {
-    if (!isHighlightMode) return
+    if (activePanel !== 'highlights') return
     const selection = window.getSelection()
     const text = selection.toString().trim()
     if (text) {
@@ -216,7 +215,7 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
       setSelectedText('')
       setSelectionRange(null)
     }
-  }, [isHighlightMode])
+  }, [activePanel])
 
   // Player controls
   const handlePlayPause = () => {
@@ -581,8 +580,6 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
           onJumpToHighlight={handleJumpToHighlight}
           activeColor={activeColor}
           onColorChange={setActiveColor}
-          isHighlightMode={isHighlightMode}
-          onToggleHighlightMode={() => setIsHighlightMode(!isHighlightMode)}
         />
       )}
       {activePanel === 'summaries' && (
