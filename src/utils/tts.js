@@ -200,8 +200,13 @@ export class TTSEngine {
    * Arrêter la lecture
    */
   stop() {
+    this.isPlaying = false
+    this.isPaused = false
     this.synth.cancel()
     if (this._audioEl) {
+      this._audioEl.ontimeupdate = null
+      this._audioEl.onended = null
+      this._audioEl.onerror = null
       this._audioEl.pause()
       this._audioEl.src = ''
       this._audioEl = null
@@ -210,16 +215,20 @@ export class TTSEngine {
       this._sherpaStop()
       this._sherpaStop = null
     }
-    this.isPlaying = false
-    this.isPaused = false
-    // Ne PAS vider le cache ici — il est réutilisé lors de play()/seek/skip
   }
 
   seekToCharPosition(charPos) {
     const wasPlaying = this.isPlaying
-    // Nettoyer tout buffer en cours (audio, synth, sherpa)
+    // IMPORTANT: set flags BEFORE cleanup to prevent event handlers from restarting chains
+    this.isPlaying = false
+    this.isPaused = false
+
+    // Nullify event handlers BEFORE modifying audio to prevent onerror/onended firing
     this.synth.cancel()
     if (this._audioEl) {
+      this._audioEl.ontimeupdate = null
+      this._audioEl.onended = null
+      this._audioEl.onerror = null
       this._audioEl.pause()
       this._audioEl.src = ''
       this._audioEl = null
@@ -228,8 +237,6 @@ export class TTSEngine {
       this._sherpaStop()
       this._sherpaStop = null
     }
-    this.isPlaying = false
-    this.isPaused = false
 
     let targetIndex = 0
     for (let i = 0; i < this.sentencePositions.length; i++) {
@@ -246,9 +253,7 @@ export class TTSEngine {
     }
     this._emitProgress()
 
-    if (wasPlaying) {
-      this.play()
-    }
+    // Do NOT auto-resume — let the caller decide whether to play()
   }
 
   skipSentences(count) {

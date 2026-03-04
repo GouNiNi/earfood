@@ -252,10 +252,15 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
 
   const handleSeek = (pct) => {
     if (!ttsRef.current || !doc) return
+    const wasPlaying = isPlaying
     const charPos = Math.floor((pct / 100) * doc.content.length)
     ttsRef.current.seekToCharPosition(charPos)
     setPercentage(pct)
     setCurrentTime(Math.floor((pct / 100) * totalDuration))
+    if (wasPlaying) {
+      ttsRef.current.play()
+      setIsPlaying(true)
+    }
   }
 
   const handleJumpToBookmark = useCallback((position) => {
@@ -265,16 +270,26 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
 
   const handleJumpToHighlight = useCallback((highlight) => {
     if (!ttsRef.current || !doc) return
+    const wasPlaying = isPlaying
     ttsRef.current.seekToCharPosition(highlight.startPos)
-  }, [doc])
+    if (wasPlaying) {
+      ttsRef.current.play()
+      setIsPlaying(true)
+    }
+  }, [doc, isPlaying])
 
   const handleJumpToChapter = useCallback((charPos) => {
     if (!ttsRef.current || !doc) return
+    const wasPlaying = isPlaying
     ttsRef.current.seekToCharPosition(charPos)
     const pct = (charPos / doc.content.length) * 100
     setPercentage(pct)
     setCurrentTime(Math.floor((pct / 100) * totalDuration))
-  }, [doc, totalDuration])
+    if (wasPlaying) {
+      ttsRef.current.play()
+      setIsPlaying(true)
+    }
+  }, [doc, totalDuration, isPlaying])
 
   const handleToggleAutoPlay = useCallback(async () => {
     const next = !autoPlay
@@ -373,9 +388,11 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
                   onClick={() => {
                     if (ttsRef.current && pos) {
                       ttsRef.current.seekToCharPosition(pos.start)
-                      if (!isPlaying && autoPlay) {
+                      if (autoPlay) {
                         ttsRef.current.play()
                         setIsPlaying(true)
+                      } else {
+                        setIsPlaying(false)
                       }
                     }
                   }}
