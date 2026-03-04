@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
-import { ArrowLeft, Bookmark, Highlighter, FileText, BookOpen, MessageCircle } from 'lucide-react'
+import { ArrowLeft, Bookmark, Highlighter, FileText, BookOpen, MessageCircle, Settings, List } from 'lucide-react'
 import { getDocument, getProgress, saveProgress, getBookmarks, getHighlights, updateAnalytics, getSettings } from '../stores'
 import { TTSEngine } from '../utils/tts'
 import Player from './Player'
@@ -8,6 +8,7 @@ import HighlightPanel from './HighlightPanel'
 import ExportPanel from './ExportPanel'
 import SummaryPanel from './SummaryPanel'
 import ChatPanel from './ChatPanel'
+import ChapterPanel from './ChapterPanel'
 
 const Reader = ({ documentId, onBack, onOpenSettings }) => {
   const [doc, setDoc] = useState(null)
@@ -194,13 +195,20 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     const selection = window.getSelection()
     const text = selection.toString().trim()
     if (text) {
-      const textView = textViewRef.current
-      if (textView) {
-        const range = selection.getRangeAt(0)
+      const range = selection.getRangeAt(0)
+      // Find the sentence span containing the selection start
+      let node = range.startContainer
+      while (node && (!node.dataset || node.dataset.start === undefined)) {
+        node = node.parentElement
+      }
+      if (node && node.dataset.start !== undefined) {
+        const spanStart = parseInt(node.dataset.start, 10)
+        // Offset within the span's text content
         const preRange = document.createRange()
-        preRange.setStart(textView, 0)
+        preRange.setStart(node, 0)
         preRange.setEnd(range.startContainer, range.startOffset)
-        const startPos = preRange.toString().length
+        const offsetInSpan = preRange.toString().length
+        const startPos = spanStart + offsetInSpan
 
         setSelectedText(text)
         setSelectionRange({ start: startPos, end: startPos + text.length })
@@ -255,6 +263,14 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
     ttsRef.current.seekToCharPosition(highlight.startPos)
   }
 
+  const handleJumpToChapter = (charPos) => {
+    if (!ttsRef.current || !doc) return
+    ttsRef.current.seekToCharPosition(charPos)
+    const pct = (charPos / doc.content.length) * 100
+    setPercentage(pct)
+    setCurrentTime(Math.floor((pct / 100) * totalDuration))
+  }
+
   const togglePanel = (panel) => {
     setActivePanel(activePanel === panel ? null : panel)
   }
@@ -297,6 +313,8 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
             <span
               key={index}
               ref={(el) => { sentenceRefs.current[index] = el }}
+              data-start={pos?.start}
+              data-end={pos?.end}
               className={`reader-sentence ${isCurrent ? 'reader-sentence-active' : ''}`}
               style={{
                 backgroundColor: isCurrent
@@ -341,6 +359,9 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
           <ArrowLeft size={20} />
         </button>
         <h2 className="reader-title serif">{doc.title}</h2>
+        <button className="reader-back-btn" onClick={onOpenSettings} title="Réglages">
+          <Settings size={20} />
+        </button>
       </header>
 
       {/* Zone de texte */}
@@ -350,6 +371,13 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
 
       {/* Barre d'actions */}
       <div className="reader-actions">
+        <button
+          className={`reader-action-btn ${activePanel === 'chapters' ? 'active' : ''}`}
+          onClick={() => togglePanel('chapters')}
+        >
+          <List size={16} />
+          <span>Chapitres</span>
+        </button>
         <button
           className={`reader-action-btn ${activePanel === 'bookmarks' ? 'active' : ''}`}
           onClick={() => togglePanel('bookmarks')}
@@ -388,6 +416,13 @@ const Reader = ({ documentId, onBack, onOpenSettings }) => {
       </div>
 
       {/* Panneaux contextuels */}
+      {activePanel === 'chapters' && (
+        <ChapterPanel
+          chapters={doc.chapters || []}
+          currentCharPos={sentencePositions[currentSentenceIndex]?.start || 0}
+          onJumpToChapter={handleJumpToChapter}
+        />
+      )}
       {activePanel === 'bookmarks' && (
         <BookmarkPanel
           documentId={documentId}

@@ -10,7 +10,7 @@ export function initGemini(apiKey) {
   if (!apiKey) return false
   try {
     genAI = new GoogleGenerativeAI(apiKey)
-    model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
+    model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' })
     return true
   } catch (e) {
     console.error('Erreur initialisation Gemini:', e)
@@ -29,8 +29,11 @@ export function isGeminiReady() {
  * Détecter les chapitres dans un texte
  * Utilise une heuristique simple : lignes courtes en majuscules ou numérotées
  */
-export function detectChapters(text) {
+export function detectChapters(text, nativeChapters) {
   if (!text) return [{ title: 'Document complet', start: 0, end: text?.length || 0 }]
+
+  // Utiliser les chapitres natifs s'ils existent
+  if (nativeChapters && nativeChapters.length > 0) return nativeChapters
 
   const lines = text.split('\n')
   const chapters = []

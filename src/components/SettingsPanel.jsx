@@ -47,7 +47,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
       initGemini(settings.geminiApiKey)
     }
     setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    setTimeout(() => onClose(), 500)
   }
 
   const handleClearCache = async () => {
@@ -159,7 +159,7 @@ const SettingsPanel = ({ onClose, onDarkModeChange, darkMode }) => {
             </button>
           </div>
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.5rem 0 0' }}>
-            Clé API Google AI Studio pour Gemini 1.5 Flash
+            Clé API Google AI Studio pour Gemini 2.5 Flash Lite
           </p>
         </div>
 

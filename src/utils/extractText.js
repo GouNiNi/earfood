@@ -44,7 +44,10 @@ async function extractFromPDF(file) {
     // Pas de métadonnées, on garde le nom du fichier
   }
 
+  // Comptage cumulatif des positions par page (avant nettoyage)
+  const pageCharOffsets = [] // charOffset au début de chaque page
   for (let i = 1; i <= pdf.numPages; i++) {
+    pageCharOffsets.push(fullText.length)
     const page = await pdf.getPage(i)
     const content = await page.getTextContent()
     const pageText = content.items
@@ -53,11 +56,63 @@ async function extractFromPDF(file) {
     fullText += pageText + '\n\n'
   }
 
-  return {
-    text: fullText.trim(),
-    title,
-    author: 'Auteur inconnu'
+  // Extraire la TOC native via getOutline
+  let chapters = []
+  try {
+    const outline = await pdf.getOutline()
+    if (outline && outline.length > 0) {
+      for (const item of outline) {
+        const dest = item.dest
+        if (!dest) continue
+        try {
+          const resolved = typeof dest === 'string'
+            ? await pdf.getDestination(dest)
+            : dest
+          if (!resolved) continue
+          const pageIndex = await pdf.getPageIndex(resolved[0])
+          chapters.push({
+            title: item.title,
+            start: pageCharOffsets[pageIndex] || 0,
+          })
+        } catch (e) {
+          // Destination non résolue, on skip
+        }
+      }
+      // Trier par position et ajouter les fins
+      chapters.sort((a, b) => a.start - b.start)
+      for (let i = 0; i < chapters.length; i++) {
+        chapters[i].end = i < chapters.length - 1
+          ? chapters[i + 1].start
+          : fullText.length
+      }
+    }
+  } catch (e) {
+    // Pas de TOC
   }
+
+  return {
+    text: cleanPdfText(fullText.trim()),
+    title,
+    author: 'Auteur inconnu',
+    chapters: chapters.length > 0 ? chapters : undefined,
+  }
+}
+
+/**
+ * Nettoie les artefacts courants de l'extraction PDF
+ */
+function cleanPdfText(text) {
+  return text
+    // Mots coupés en fin de ligne : "compré-\nhension" → "compréhension"
+    .replace(/(\w)-\s*\n\s*(\w)/g, '$1$2')
+    // Lettres isolées : "d es" → "des", "l a" → "la" (lettre isolée suivie d'un espace et d'une lettre)
+    .replace(/\b(\w) (\w{2,})/g, '$1$2')
+    // Tirets espacés entre lettres : "bien - être" → "bien-être"
+    .replace(/(\w) - (\w)/g, '$1-$2')
+    // Ponctuation décollée : " ." " ," " ;" " :"
+    .replace(/ ([.,;:!?])/g, '$1')
+    // Espaces multiples → espace simple
+    .replace(/ {2,}/g, ' ')
 }
 
 /**
@@ -82,9 +137,11 @@ async function extractFromEPUB(file) {
 
   let fullText = ''
 
-  // Parcourir les sections du livre
+  // Map section href → char offset for TOC mapping
+  const sectionOffsets = {}
   const spine = book.spine
   for (const section of spine.items) {
+    sectionOffsets[section.href] = fullText.length
     try {
       const doc = await section.load(book.load.bind(book))
       if (doc && doc.body) {
@@ -95,12 +152,36 @@ async function extractFromEPUB(file) {
     }
   }
 
+  // Extraire la TOC native
+  let chapters = []
+  try {
+    const toc = book.navigation?.toc
+    if (toc && toc.length > 0) {
+      for (const item of toc) {
+        const href = item.href?.split('#')[0] // Retirer l'ancre
+        const offset = sectionOffsets[href]
+        if (offset !== undefined) {
+          chapters.push({ title: item.label?.trim(), start: offset })
+        }
+      }
+      chapters.sort((a, b) => a.start - b.start)
+      for (let i = 0; i < chapters.length; i++) {
+        chapters[i].end = i < chapters.length - 1
+          ? chapters[i + 1].start
+          : fullText.length
+      }
+    }
+  } catch (e) {
+    // Pas de TOC
+  }
+
   book.destroy()
 
   return {
     text: fullText.trim() || `Contenu extrait de ${file.name}`,
     title,
-    author
+    author,
+    chapters: chapters.length > 0 ? chapters : undefined,
   }
 }
 
