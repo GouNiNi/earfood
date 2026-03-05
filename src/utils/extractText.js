@@ -233,10 +233,9 @@ async function extractFromDOCX(file) {
   const htmlResult = await mammoth.convertToHtml({ arrayBuffer })
   const html = htmlResult.value
 
-  // Extract plain text from the HTML
-  const parser = new DOMParser()
-  const parsed = parser.parseFromString(html, 'text/html')
-  const text = parsed.body.textContent || ''
+  // Extract plain text preserving format (newlines for paragraphs)
+  const textResult = await mammoth.extractRawText({ arrayBuffer })
+  const text = textResult.value || ''
 
   const plainText = text.trim();
   let chapters = detectChapters(plainText);
