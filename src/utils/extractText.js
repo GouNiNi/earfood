@@ -2,6 +2,7 @@ import * as pdfjsLib from 'pdfjs-dist'
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import mammoth from 'mammoth'
 import ePub from 'epubjs'
+import { detectChapters } from './chapterHeuristics.js'
 
 // Configurer le worker PDF.js — Vite gère le hash via ?url
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker
@@ -90,11 +91,17 @@ async function extractFromPDF(file) {
     // Pas de TOC
   }
 
+  let returnedChapters = chapters.length > 0 ? chapters : undefined;
+  const cleanedText = cleanPdfText(fullText.trim());
+  if (!returnedChapters || returnedChapters.length < 2) {
+    returnedChapters = detectChapters(cleanedText) || returnedChapters;
+  }
+
   return {
-    text: cleanPdfText(fullText.trim()),
+    text: cleanedText,
     title,
     author: 'Auteur inconnu',
-    chapters: chapters.length > 0 ? chapters : undefined,
+    chapters: returnedChapters,
   }
 }
 
@@ -202,12 +209,17 @@ async function extractFromEPUB(file) {
 
   book.destroy()
 
+  let returnedChapters = chapters.length > 0 ? chapters : undefined;
+  if (!returnedChapters || returnedChapters.length < 2) {
+    returnedChapters = detectChapters(fullText.trim()) || returnedChapters;
+  }
+
   return {
     text: fullText.trim() || `Contenu extrait de ${file.name}`,
     htmlContent: htmlParts.length > 0 ? htmlParts.join('<hr/>') : undefined,
     title,
     author,
-    chapters: chapters.length > 0 ? chapters : undefined,
+    chapters: returnedChapters,
   }
 }
 
@@ -226,10 +238,14 @@ async function extractFromDOCX(file) {
   const parsed = parser.parseFromString(html, 'text/html')
   const text = parsed.body.textContent || ''
 
+  const plainText = text.trim();
+  let chapters = detectChapters(plainText);
+
   return {
-    text: text.trim(),
+    text: plainText,
     htmlContent: html || undefined,
     title: file.name.replace(/\.docx?$/i, ''),
-    author: 'Auteur inconnu'
+    author: 'Auteur inconnu',
+    chapters
   }
 }
