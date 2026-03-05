@@ -227,14 +227,15 @@ async function extractFromEPUB(file) {
  * Extrait le texte d'un DOCX avec mammoth
  */
 async function extractFromDOCX(file) {
-  const arrayBuffer = await file.arrayBuffer()
+  const arrayBuffer1 = await file.arrayBuffer()
+  const arrayBuffer2 = await file.arrayBuffer()
 
   // Extract HTML for rich rendering
-  const htmlResult = await mammoth.convertToHtml({ arrayBuffer })
+  const htmlResult = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer1 })
   const html = htmlResult.value
 
   // Extract plain text preserving format (newlines for paragraphs)
-  const textResult = await mammoth.extractRawText({ arrayBuffer })
+  const textResult = await mammoth.extractRawText({ arrayBuffer: arrayBuffer2 })
   const text = textResult.value || ''
 
   const plainText = text.trim();
