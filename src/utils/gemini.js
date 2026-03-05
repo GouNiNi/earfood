@@ -26,8 +26,8 @@ export function isGeminiReady() {
 }
 
 /**
- * Détecter les chapitres dans un texte
- * Utilise une heuristique simple : lignes courtes en majuscules ou numérotées
+ * Détecter les chapitres dans un texte (heuristique locale, sans IA)
+ * Utilise des patterns structurels, numérotation, typographie
  */
 export function detectChapters(text, nativeChapters) {
   if (!text) return [{ title: 'Document complet', start: 0, end: text?.length || 0 }]
@@ -39,55 +39,92 @@ export function detectChapters(text, nativeChapters) {
   const chapters = []
   let currentPos = 0
 
-  // Patterns de titres de chapitres (strict)
-  const chapterPatterns = [
-    /^(chapitre|chapter|partie|part|section|acte|livre|tome)\s+[\dIVXLCDM]+/i,
-    /^(prologue|épilogue|epilogue|préface|preface|introduction|conclusion|avant-propos|postface)/i,
-    /^(I{1,3}|IV|V|VI{0,3}|IX|X{1,3})[.\s\-–—:]/,
+  // === PATTERNS STRICTS (haute confiance) ===
+  const strictPatterns = [
+    // Chapitres numérotés : "Chapitre 1", "Chapter IV", "Chapitre premier"
+    /^(chapitre|chapter)\s+([\dIVXLCDM]+|premier|deuxième|troisième|un|deux|trois|quatre|cinq|six|sept|huit|neuf|dix)(\s*[:\-–—.]\s*.+)?$/i,
+    // Parties, sections, actes, livres, tomes
+    /^(partie|part|section|acte|livre|tome)\s+([\dIVXLCDM]+|premi[eè]re?|deuxi[eè]me|troisi[eè]me)(\s*[:\-–—.]\s*.+)?$/i,
+    // Mots-clés structurels seuls ou avec sous-titre
+    /^(prologue|épilogue|epilogue|préface|preface|introduction|conclusion|avant-propos|postface|avertissement|remerciements|annexe|appendice|bibliographie|glossaire|table des matières|sommaire)(\s*[:\-–—.]\s*.+)?$/i,
+    // Numérotation romaine isolée : "I.", "IV —", "XII :"
+    /^(I{1,3}|IV|VI{0,3}|IX|X{1,3}|XI{1,3}|XIV|XV|XVI{0,3}|XIX|XX{0,3})[.\s\-–—:]\s*/,
+    // Numérotation arabe avec titre : "1. Le début", "23 — Conclusion"
     /^\d{1,3}[.\s\-–—:]\s*[A-ZÀ-Ü]/,
-    /^#{1,3}\s+/,
+    // Markdown headings
+    /^#{1,3}\s+\S/,
   ]
 
-  // Patterns plus souples: ligne courte précédée/suivie d'une ligne vide
-  const softTitlePattern = (line, prevLine, nextLine) => {
-    if (line.length < 4 || line.length > 120) return false
-    const isIsolated = (!prevLine || prevLine.trim() === '') && (!nextLine || nextLine.trim() === '')
-    if (!isIsolated) return false
-    // Starts with uppercase, not a regular sentence (no period at end)
-    if (/^[A-ZÀ-Ü]/.test(line) && !line.endsWith('.') && !line.endsWith(',')) return true
-    return false
+  // === PATTERN TOUT-MAJUSCULES (ligne isolée) ===
+  const isAllCapsTitle = (line, prevLine, nextLine) => {
+    if (line.length < 4 || line.length > 100) return false
+    if (line !== line.toUpperCase()) return false
+    if (!/[A-ZÀ-Ü]/.test(line)) return false
+    // Exclure les lignes qui ressemblent à des acronymes/abbréviations pures
+    if (/^[A-Z]{1,4}$/.test(line)) return false
+    // Doit être isolée (ligne vide avant ou après)
+    const emptyBefore = !prevLine || prevLine.trim() === ''
+    const emptyAfter = !nextLine || nextLine.trim() === ''
+    return emptyBefore || emptyAfter
   }
 
+  // === PATTERN SOUPLE (ligne courte isolée, commence par majuscule) ===
+  const isSoftTitle = (line, prevLine, nextLine) => {
+    if (line.length < 4 || line.length > 80) return false
+    // Doit être isolée des deux côtés
+    if (prevLine && prevLine.trim() !== '') return false
+    if (nextLine && nextLine.trim() !== '') return false
+    // Commence par majuscule, ne finit pas comme une phrase
+    if (!/^[A-ZÀ-Ü]/.test(line)) return false
+    if (/[.!?,;:]$/.test(line)) return false
+    // Pas trop de mots (un titre dépasse rarement 10 mots)
+    if (line.split(/\s+/).length > 12) return false
+    return true
+  }
+
+  // === SCAN LIGNE PAR LIGNE ===
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
+    if (line.length < 2) {
+      currentPos += lines[i].length + 1
+      continue
+    }
+
     const lineStart = text.indexOf(lines[i], currentPos)
+    const prevLine = i > 0 ? lines[i - 1]?.trim() : null
+    const nextLine = i < lines.length - 1 ? lines[i + 1]?.trim() : null
 
-    const isStrictChapter = line.length > 2 && line.length < 120 &&
-      (chapterPatterns.some(p => p.test(line)) ||
-       (line === line.toUpperCase() && line.length > 4 && line.length < 80 && /[A-ZÀ-Ü]/.test(line)))
+    const isStrict = strictPatterns.some(p => p.test(line))
+    const isCaps = !isStrict && isAllCapsTitle(line, prevLine, nextLine)
+    const isSoft = !isStrict && !isCaps && isSoftTitle(line, prevLine, nextLine)
 
-    const isSoftChapter = !isStrictChapter &&
-      softTitlePattern(line, i > 0 ? lines[i - 1] : null, i < lines.length - 1 ? lines[i + 1] : null)
+    if (isStrict || isCaps || isSoft) {
+      // Nettoyer le titre (retirer markdown #, espaces)
+      let title = line.replace(/^#+\s*/, '').trim()
+      if (title.length > 80) title = title.slice(0, 77) + '…'
 
-    if (isStrictChapter || isSoftChapter) {
-      chapters.push({
-        title: line.replace(/^#+\s*/, '').trim(),
-        start: lineStart >= 0 ? lineStart : currentPos,
-      })
+      // Éviter les doublons proches (< 200 chars = probablement titre + sous-titre)
+      const lastChapter = chapters[chapters.length - 1]
+      const pos = lineStart >= 0 ? lineStart : currentPos
+      if (lastChapter && pos - lastChapter.start < 200 && !isStrict) {
+        // Fusionner comme sous-titre
+        lastChapter.title += ' — ' + title
+      } else {
+        chapters.push({ title, start: pos })
+      }
     }
 
     currentPos = lineStart >= 0 ? lineStart + lines[i].length : currentPos + lines[i].length + 1
   }
 
-  // Si aucun chapitre détecté, créer des segments à chaque double saut de ligne (~5000 chars min)
+  // === FALLBACK : segmentation par paragraphes si rien trouvé ===
   if (chapters.length === 0) {
-    const MIN_SEGMENT = 5000
+    const MIN_SEGMENT = 4000
     let lastStart = 0
     const doubleNewlines = [...text.matchAll(/\n\s*\n/g)]
 
     for (const match of doubleNewlines) {
       if (match.index - lastStart >= MIN_SEGMENT) {
-        // Use the first meaningful words after this break as title
         const after = text.slice(match.index).replace(/^\s+/, '')
         const firstLine = after.split('\n')[0].trim()
         const title = firstLine.length > 60
@@ -98,13 +135,13 @@ export function detectChapters(text, nativeChapters) {
         lastStart = match.index
       }
     }
+  }
 
-    // Ensure first segment always exists
-    if (chapters.length === 0 || chapters[0].start > 0) {
-      const firstLine = text.split('\n').find(l => l.trim())?.trim() || 'Début'
-      const title = firstLine.length > 60 ? firstLine.slice(0, 57) + '…' : firstLine
-      chapters.unshift({ title, start: 0 })
-    }
+  // Toujours s'assurer qu'on a un premier segment
+  if (chapters.length === 0 || chapters[0].start > 200) {
+    const firstLine = text.split('\n').find(l => l.trim())?.trim() || 'Début'
+    const title = firstLine.length > 60 ? firstLine.slice(0, 57) + '…' : firstLine
+    chapters.unshift({ title, start: 0 })
   }
 
   // Ajouter les positions de fin
@@ -255,7 +292,8 @@ Réponds aux questions de l'utilisateur en te basant uniquement sur le contenu c
       role: 'model',
       parts: [{ text: "Je suis prêt à vous aider à comprendre ce document. Posez-moi vos questions !" }]
     },
-    ...chatHistory.flatMap(msg => [
+    // Fenêtre glissante : garder seulement les 5 derniers échanges
+    ...chatHistory.slice(-5).flatMap(msg => [
       { role: 'user', parts: [{ text: msg.question }] },
       { role: 'model', parts: [{ text: msg.answer }] },
     ]),

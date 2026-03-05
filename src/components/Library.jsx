@@ -213,7 +213,6 @@ const Library = ({ onOpenDocument, onOpenSettings }) => {
         <ImportModal
           onClose={() => setIsImportModalOpen(false)}
           onImported={loadDocuments}
-          onOpenSettings={onOpenSettings}
         />
       )}
 

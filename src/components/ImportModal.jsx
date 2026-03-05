@@ -1,20 +1,15 @@
-import { useRef, useState, useEffect } from 'react'
-import { Plus, FileText, Loader, AlertTriangle, Settings } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Plus, FileText, Loader } from 'lucide-react'
 import { extractText } from '../utils/extractText'
 import { estimateDuration } from '../utils/formatTime'
-import { saveDocument, getSettings } from '../stores'
-import { initGemini, isGeminiReady, detectChaptersWithAI, detectChapters } from '../utils/gemini'
+import { saveDocument } from '../stores'
+import { detectChapters } from '../utils/gemini'
 
-const ImportModal = ({ onClose, onImported, onOpenSettings }) => {
+const ImportModal = ({ onClose, onImported }) => {
   const fileInputRef = useRef(null)
   const [isProcessing, setIsProcessing] = useState(false)
   const [error, setError] = useState(null)
   const [progress, setProgress] = useState('')
-  const [hasApiKey, setHasApiKey] = useState(true) // optimistic
-
-  useEffect(() => {
-    getSettings().then(s => setHasApiKey(!!s.geminiApiKey))
-  }, [])
 
   const handleFileUpload = async (e) => {
     const file = e.target.files[0]
@@ -31,26 +26,9 @@ const ImportModal = ({ onClose, onImported, onOpenSettings }) => {
         throw new Error('Le document semble vide ou illisible.')
       }
 
-      // Détecter les chapitres si pas de chapitres natifs
-      let finalChapters = chapters
-      if (!finalChapters || finalChapters.length === 0) {
-        setProgress('Détection des chapitres...')
-        // Essayer avec Gemini d'abord
-        if (!isGeminiReady()) {
-          const settings = await getSettings()
-          if (settings.geminiApiKey) initGemini(settings.geminiApiKey)
-        }
-        if (isGeminiReady()) {
-          const aiChapters = await detectChaptersWithAI(text)
-          if (aiChapters && aiChapters.length > 0) {
-            finalChapters = aiChapters
-          }
-        }
-        // Fallback heuristique local
-        if (!finalChapters || finalChapters.length === 0) {
-          finalChapters = detectChapters(text, null)
-        }
-      }
+      // Détecter les chapitres (heuristique locale, pas d'IA)
+      setProgress('Détection des chapitres...')
+      const finalChapters = detectChapters(text, chapters)
 
       setProgress('Recherche des métadonnées et couverture...')
 
@@ -127,38 +105,6 @@ const ImportModal = ({ onClose, onImported, onOpenSettings }) => {
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <h2 className="serif">Importer un document</h2>
         <p style={{ color: 'var(--text-muted)' }}>Formats supportés : PDF, EPUB, DOCX</p>
-
-        {!hasApiKey && (
-          <div style={{
-            padding: '0.75rem 1rem',
-            background: 'rgba(197, 160, 89, 0.1)',
-            border: '1px solid var(--accent-gold)',
-            borderRadius: '4px',
-            fontSize: '0.85rem',
-            margin: '1rem 0',
-            color: 'var(--text-main)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.5rem' }}>
-              <AlertTriangle size={16} color="var(--accent-gold)" />
-              <strong>Clé API Gemini manquante</strong>
-            </div>
-            <p style={{ margin: '0 0 0.5rem', lineHeight: 1.4 }}>
-              Certaines fonctionnalités (résumés IA, chat, détection de chapitres) ne fonctionneront pas sans clé API.
-            </p>
-            <button
-              onClick={(e) => { e.stopPropagation(); onClose(); onOpenSettings() }}
-              style={{
-                display: 'inline-flex', alignItems: 'center', gap: '6px',
-                padding: '0.4rem 0.8rem', fontSize: '0.8rem',
-                border: '1px solid var(--accent-gold)', borderRadius: '4px',
-                background: 'transparent', color: 'var(--accent-gold)', cursor: 'pointer',
-              }}
-            >
-              <Settings size={14} />
-              Configurer la clé API
-            </button>
-          </div>
-        )}
 
         {error && (
           <div style={{
