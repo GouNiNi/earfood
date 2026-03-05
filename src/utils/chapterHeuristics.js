@@ -5,14 +5,14 @@ export function detectChapters(text) {
     // 1. Explicit labels: "Chapitre 1", "Partie II", "Book 3"
     // 2. Structural keywords: "Introduction", "Conclusion"
     // 3. Standalone roman numerals or numbers
-    // 4. Short all-caps sentences (under 50 chars) heavily used in some PDFs for chapter titles
-    const regex = /^[ \t]*((?:chapitre|chapter|partie|part|livre|book)[ \t]+(?:[0-9]+|[IVXLCDM]+)(?:[ \t]*[:\.-][ \t]*(?:.*))?|(?:introduction|conclusion|prologue|epilogue|preface|postface)|(?:[IVXLCDM]{1,7}|[0-9]{1,3})|[A-ZÀ-Ÿ\s\-']{3,50})[ \t]*$/gmi;
+    // 4. Short all-caps sentences are EXCLUDED as they create too many false positives.
+    const regex = /^[ \t]*((?:(?:chapitre|chapter|partie|part|livre|book)[ \t]+(?:[0-9]+|[IVXLCDM]+)(?:[ \t]*[:\.-][ \t]*.*)?)|(?:introduction|conclusion|prologue|epilogue|preface|postface)|(?:[IVXLCDM]{1,7}|[0-9]{1,3}))[ \t]*$/gmi;
 
     let match;
     while ((match = regex.exec(text)) !== null) {
-        let title = match[0].trim();
+        let title = match[1].trim();
         const start = match.index;
-        const isStandaloneNumberOrNumeral = !!match[4];
+        const isStandaloneNumberOrNumeral = /^[IVXLCDM]+|[0-9]+$/.test(title);
 
         // If it's a standalone number, verify it's not just a page number.
         // By checking if the text around it has sufficient spacing (like paragraph breaks).
