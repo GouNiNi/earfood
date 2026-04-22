@@ -35,14 +35,14 @@ services:
       - traefik.http.routers.earfood.tls=true
       - traefik.http.routers.earfood.entrypoints=websecure
       - traefik.http.routers.earfood.tls.certresolver=letsencrypt
-      - traefik.http.middlewares.earfood.headers.SSLRedirect=true
-      - traefik.http.middlewares.earfood.headers.STSSeconds=315360000
-      - traefik.http.middlewares.earfood.headers.browserXSSFilter=true
-      - traefik.http.middlewares.earfood.headers.contentTypeNosniff=true
-      - traefik.http.middlewares.earfood.headers.forceSTSHeader=true
-      - traefik.http.middlewares.earfood.headers.SSLHost=${DOMAIN_NAME}
-      - traefik.http.middlewares.earfood.headers.STSIncludeSubdomains=true
-      - traefik.http.middlewares.earfood.headers.STSPreload=true
+      - traefik.http.middlewares.earfood.headers.sslredirect=true
+      - traefik.http.middlewares.earfood.headers.stsseconds=315360000
+      - traefik.http.middlewares.earfood.headers.browserxssfilter=true
+      - traefik.http.middlewares.earfood.headers.contenttypenosniff=true
+      - traefik.http.middlewares.earfood.headers.forcestsheader=true
+      - traefik.http.middlewares.earfood.headers.sslhost=${DOMAIN_NAME}
+      - traefik.http.middlewares.earfood.headers.stsincludesubdomains=true
+      - traefik.http.middlewares.earfood.headers.stspreload=true
       - traefik.http.routers.earfood.middlewares=earfood@docker
       - traefik.http.services.earfood.loadbalancer.server.port=80
 
